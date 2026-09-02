@@ -165,6 +165,9 @@ impl ColorTheme {
             AgentType::Claude => self.agent_claude,
             AgentType::Codex => self.agent_codex,
             AgentType::OpenCode => self.agent_opencode,
+            // Fork-local: Pi gets a fixed warm orange; no themable option
+            // until upstream grows one.
+            AgentType::Pi => Color::Indexed(214),
             AgentType::Unknown => self.status_unknown,
         }
     }

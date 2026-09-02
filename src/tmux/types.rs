@@ -1,6 +1,9 @@
 pub const CLAUDE_AGENT: &str = "claude";
 pub const CODEX_AGENT: &str = "codex";
 pub const OPENCODE_AGENT: &str = "opencode";
+// Fork-local: Martin's Pi runtime reports via a Pi extension that sets
+// the pane options directly (no hook-event adapter needed).
+pub const PI_AGENT: &str = "pi";
 
 #[derive(Debug, Clone)]
 pub struct PaneInfo {
@@ -95,6 +98,7 @@ pub enum AgentType {
     Claude,
     Codex,
     OpenCode,
+    Pi,
     #[allow(dead_code)]
     Unknown,
 }
@@ -122,6 +126,7 @@ impl AgentType {
             CLAUDE_AGENT => Some(Self::Claude),
             CODEX_AGENT => Some(Self::Codex),
             OPENCODE_AGENT => Some(Self::OpenCode),
+            PI_AGENT => Some(Self::Pi),
             _ => None,
         }
     }
@@ -131,6 +136,7 @@ impl AgentType {
             Self::Claude => CLAUDE_AGENT,
             Self::Codex => CODEX_AGENT,
             Self::OpenCode => OPENCODE_AGENT,
+            Self::Pi => PI_AGENT,
             Self::Unknown => "unknown",
         }
     }
