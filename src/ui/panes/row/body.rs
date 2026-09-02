@@ -88,6 +88,12 @@ pub(super) fn wait_reason_row(
     if wait_reason.is_empty() {
         return None;
     }
+    // "resumed" / "resumed (compact)" only state that the session was
+    // restored — no action is needed, so the row is pure noise. Actionable
+    // reasons (permission required, rate limit, ...) still render.
+    if wait_reason.starts_with("session_resumed") {
+        return None;
+    }
     let reason = wait_reason_label(wait_reason);
     let text = format!("  {}", reason);
     let text_dw = display_width(&text);
