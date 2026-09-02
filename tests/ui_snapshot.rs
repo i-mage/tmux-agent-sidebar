@@ -1094,7 +1094,7 @@ fn snapshot_accept_edits_badge_ui() {
      ≡1  ●1  ◎0  ◐0  ○0  ✕0
     ⓘ                        — ▾
     project
-    ┃ ● claude edit
+    ┃ ● claude
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
@@ -1449,7 +1449,7 @@ fn right_border_all_permission_modes_and_agents() {
      ≡1  ●1  ◎0  ◐0  ○0  ✕0
     ⓘ                        — ▾
     project
-    ┃ ● claude edit     1h30m32s
+    ┃ ● claude          1h30m32s
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
@@ -1503,7 +1503,7 @@ fn right_border_all_permission_modes_and_agents() {
      ≡1  ●1  ◎0  ◐0  ○0  ✕0
     ⓘ                        — ▾
     project
-    ┃ ● codex edit      1h30m32s
+    ┃ ● codex           1h30m32s
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
