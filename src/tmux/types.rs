@@ -78,7 +78,10 @@ impl PermissionMode {
         match self {
             Self::Default => "",
             Self::Plan => "plan",
-            Self::AcceptEdits => "edit",
+            // Fork-local: acceptEdits is the everyday mode here, so its badge
+            // carries no signal — hide it like Default. Unusual modes
+            // (plan, auto, bypass "!") keep their badges.
+            Self::AcceptEdits => "",
             Self::Auto => "auto",
             Self::DontAsk => "dontAsk",
             Self::BypassPermissions => "!",
@@ -251,7 +254,7 @@ mod tests {
     fn permission_mode_badge() {
         assert_eq!(PermissionMode::Default.badge(), "");
         assert_eq!(PermissionMode::Plan.badge(), "plan");
-        assert_eq!(PermissionMode::AcceptEdits.badge(), "edit");
+        assert_eq!(PermissionMode::AcceptEdits.badge(), "");
         assert_eq!(PermissionMode::Auto.badge(), "auto");
         assert_eq!(PermissionMode::DontAsk.badge(), "dontAsk");
         assert_eq!(PermissionMode::BypassPermissions.badge(), "!");
