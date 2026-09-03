@@ -24,6 +24,10 @@ pub struct PaneInfo {
     pub worktree: WorktreeMetadata,
     pub session_id: Option<String>,
     pub session_name: String,
+    /// Fork-local: user-assigned instance name from the `@pane_name`
+    /// tmux option (set by the agent-picker rename). Wins over the
+    /// scanned Claude `/rename` session name.
+    pub custom_name: String,
     /// `true` when the window this pane lives in was created by the
     /// sidebar's spawn flow (via the `@agent-sidebar-spawned` window
     /// option). Used by the row renderer to show a clickable red `×`

@@ -174,7 +174,10 @@ impl AppState {
     fn refresh_session_names(&mut self) {
         for group in &mut self.repo_groups {
             for (pane, _) in &mut group.panes {
-                if let Some(sid) = &pane.session_id
+                if !pane.custom_name.is_empty() {
+                    // Fork-local: picker-assigned @pane_name wins.
+                    pane.session_name.clone_from(&pane.custom_name);
+                } else if let Some(sid) = &pane.session_id
                     && let Some(name) = self.sessions.names.get(sid)
                 {
                     pane.session_name.clone_from(name);
@@ -476,6 +479,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            custom_name: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }

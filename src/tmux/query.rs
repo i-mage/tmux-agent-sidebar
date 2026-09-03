@@ -40,6 +40,7 @@ pub(super) mod pane_line_field {
     pub const PANE_STATUS: usize = 1; // absolute 7  (@pane_status)
     pub const PANE_ATTENTION: usize = 2; // absolute 8  (@pane_attention)
     pub const AGENT: usize = 3; // absolute 9  (@pane_agent)
+    pub const PANE_NAME_FIELD: usize = 4; // absolute 10 (@pane_name)
     pub const PANE_CURRENT_PATH: usize = 5; // absolute 11 (pane_current_path)
     pub const PANE_CURRENT_COMMAND: usize = 6; // absolute 12
     pub const PANE_ROLE: usize = 7; // absolute 13 (@pane_role)
@@ -338,6 +339,7 @@ fn parse_pane_fields_with_processes(
         },
         session_id,
         session_name: String::new(),
+        custom_name: parts[pane_line_field::PANE_NAME_FIELD].to_string(),
         sidebar_spawned: parts[pane_line_field::SIDEBAR_SPAWNED] == "1",
         bg_shell_cmd: {
             let raw = &parts[pane_line_field::BG_CMD];
@@ -601,6 +603,7 @@ mod tests {
             worktree: WorktreeMetadata::default(),
             session_id: None,
             session_name: String::new(),
+            custom_name: String::new(),
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }
@@ -1187,6 +1190,7 @@ mod tests {
                     worktree: WorktreeMetadata::default(),
                     session_id: None,
                     session_name: String::new(),
+                    custom_name: String::new(),
                     sidebar_spawned: false,
                     bg_shell_cmd: None,
                 }],

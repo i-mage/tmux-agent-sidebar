@@ -21,7 +21,12 @@ pub(super) fn status_row(
     let (icon, pulse_color) = running_icon_for(&pane.status, spinner_frame, icons);
     let icon_color =
         pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
-    let title_raw: &str = if pane.session_name.is_empty() {
+    // Fork-local: picker-assigned @pane_name wins over the scanned
+    // Claude /rename session name (and updates every refresh, not only
+    // when the session map goes dirty).
+    let title_raw: &str = if !pane.custom_name.is_empty() {
+        &pane.custom_name
+    } else if pane.session_name.is_empty() {
         pane.agent.label()
     } else {
         &pane.session_name
@@ -29,7 +34,13 @@ pub(super) fn status_row(
     let badge = pane.permission_mode.badge();
     let elapsed = elapsed_label(pane.started_at, now);
 
-    let title_fg = theme.agent_color(&pane.agent);
+    // Fork-local: a named instance renders bright green like the
+    // agent-picker rows; the plain agent-type label keeps its color.
+    let title_fg = if pane.custom_name.is_empty() && pane.session_name.is_empty() {
+        theme.agent_color(&pane.agent)
+    } else {
+        Color::Indexed(10)
+    };
     let elapsed_fg = if pane.status.is_active() {
         theme.text_active
     } else {
