@@ -10,7 +10,8 @@ mod ctx;
 mod status;
 
 use body::{
-    background_hint_row, idle_hint_row, prompt_rows, subagent_rows, task_progress_row,
+    activity_hint_row, background_hint_row, idle_hint_row, prompt_rows, subagent_rows,
+    task_progress_row,
     wait_reason_row,
 };
 use branch::branch_ports_row;
@@ -94,7 +95,16 @@ pub(super) fn render_pane_lines_with_ports(
     if let Some(cmd) = pane.bg_shell_cmd.as_deref() {
         out.push(background_hint_row(ctx, cmd));
     }
-    if !pane.prompt.is_empty() {
+    // Fork-local: a running agent shows its live tool activity instead
+    // of the (stale) prompt; see activity_hint_row.
+    let live_activity = if matches!(pane.status, PaneStatus::Running) {
+        activity_hint_row(pane, ctx)
+    } else {
+        None
+    };
+    if let Some(line) = live_activity {
+        out.push(line);
+    } else if !pane.prompt.is_empty() {
         out.extend(prompt_rows(pane, ctx));
     } else if matches!(pane.status, PaneStatus::Idle) {
         out.push(idle_hint_row(ctx));

@@ -176,6 +176,40 @@ pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Lin
     out
 }
 
+/// Fork-local: while an agent is RUNNING its last prompt is stale
+/// information — show the most recent tool call from the activity log
+/// instead ("what is it doing now"), like the agent-picker rows. The
+/// prompt comes back as the response row once the agent stops.
+pub(super) fn activity_hint_row(
+    pane: &crate::tmux::PaneInfo,
+    ctx: &RowCtx,
+) -> Option<Line<'static>> {
+    let entries = crate::activity::read_activity_log(&pane.pane_id, 8);
+    let entry = entries
+        .iter()
+        .rev()
+        .find(|e| e.tool != crate::activity::TASK_RESET_MARKER && !e.tool.is_empty())?;
+    let tool = entry
+        .tool
+        .strip_prefix("mcp__")
+        .and_then(|rest| rest.split_once("__").map(|(_, t)| t))
+        .unwrap_or(&entry.tool);
+    let text = if entry.label.is_empty() {
+        format!("  ⚙ {}", tool)
+    } else {
+        format!("  ⚙ {} {}", tool, entry.label)
+    };
+    let text = truncate_to_width(&text, ctx.inner_width);
+    let text_dw = display_width(&text);
+    Some(ctx.row_line(
+        vec![Span::styled(
+            text,
+            ctx.apply_bg(Style::default().fg(ctx.theme.status_running)),
+        )],
+        text_dw,
+    ))
+}
+
 pub(super) fn idle_hint_row(ctx: &RowCtx) -> Line<'static> {
     let text = "  Waiting for prompt…";
     let text_dw = display_width(text);
