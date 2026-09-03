@@ -119,6 +119,7 @@ fn test_line_to_row_two_agents() {
         session_id: None,
         session_name: String::new(),
         custom_name: String::new(),
+        ordinal: 0,
         sidebar_spawned: false,
         bg_shell_cmd: None,
     };
@@ -141,6 +142,7 @@ fn test_line_to_row_two_agents() {
         session_id: None,
         session_name: String::new(),
         custom_name: String::new(),
+        ordinal: 0,
         sidebar_spawned: false,
         bg_shell_cmd: None,
     };

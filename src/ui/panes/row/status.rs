@@ -47,8 +47,16 @@ pub(super) fn status_row(
         theme.text_muted
     };
 
+    // Fork-local: 1-based jump index (Alt+q..u order) before the icon.
+    let num = if pane.ordinal > 0 {
+        format!("{} ", pane.ordinal)
+    } else {
+        String::new()
+    };
+
     let badge_extra = if badge.is_empty() { 0 } else { 1 };
-    let fixed_width = display_width(icon) + 1 + badge_extra + display_width(badge);
+    let fixed_width =
+        display_width(&num) + display_width(icon) + 1 + badge_extra + display_width(badge);
     // User-supplied session names (set via `/rename`) can be arbitrarily
     // long; cap the title to the space left after reserving room for the
     // icon, badge, and elapsed label so they stay visible instead of
@@ -65,7 +73,14 @@ pub(super) fn status_row(
     let elapsed = truncate_to_width(&elapsed, available_for_elapsed);
     let elapsed_width = display_width(&elapsed);
 
-    let mut left_spans: Vec<Span<'static>> = Vec::with_capacity(3);
+    let mut left_spans: Vec<Span<'static>> = Vec::with_capacity(4);
+    if !num.is_empty() {
+        left_spans.push(Span::styled(
+            num.clone(),
+            // bright yellow, not grey — Martin reads these at a glance
+            ctx.apply_bg(Style::default().fg(Color::Indexed(11))),
+        ));
+    }
     left_spans.push(Span::styled(
         icon.to_string(),
         ctx.apply_bg(Style::default().fg(icon_color)),

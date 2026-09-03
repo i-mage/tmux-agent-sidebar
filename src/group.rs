@@ -143,6 +143,15 @@ pub fn group_panes_by_repo(sessions: &[crate::tmux::SessionInfo]) -> Vec<RepoGro
 
     let mut result: Vec<RepoGroup> = groups.into_values().collect();
     result.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    // Fork-local: stamp each pane with its 1-based global position so
+    // rows can show the number the Alt+q..u jump bindings use.
+    let mut ordinal = 0usize;
+    for group in &mut result {
+        for (pane, _) in &mut group.panes {
+            ordinal += 1;
+            pane.ordinal = ordinal;
+        }
+    }
     result
 }
 
@@ -228,6 +237,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             custom_name: String::new(),
+            ordinal: 0,
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }

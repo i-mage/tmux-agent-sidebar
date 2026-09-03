@@ -340,6 +340,7 @@ fn parse_pane_fields_with_processes(
         session_id,
         session_name: String::new(),
         custom_name: parts[pane_line_field::PANE_NAME_FIELD].to_string(),
+        ordinal: 0,
         sidebar_spawned: parts[pane_line_field::SIDEBAR_SPAWNED] == "1",
         bg_shell_cmd: {
             let raw = &parts[pane_line_field::BG_CMD];
@@ -604,6 +605,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             custom_name: String::new(),
+            ordinal: 0,
             sidebar_spawned: false,
             bg_shell_cmd: None,
         }
@@ -1191,6 +1193,7 @@ mod tests {
                     session_id: None,
                     session_name: String::new(),
                     custom_name: String::new(),
+                    ordinal: 0,
                     sidebar_spawned: false,
                     bg_shell_cmd: None,
                 }],

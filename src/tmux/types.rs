@@ -28,6 +28,10 @@ pub struct PaneInfo {
     /// tmux option (set by the agent-picker rename). Wins over the
     /// scanned Claude `/rename` session name.
     pub custom_name: String,
+    /// Fork-local: 1-based global position in the rendered sidebar
+    /// (groups sorted, traversal order inside). 0 = unassigned. Matches
+    /// the Alt+q..u jump indices; assigned in `group_panes_by_repo`.
+    pub ordinal: usize,
     /// `true` when the window this pane lives in was created by the
     /// sidebar's spawn flow (via the `@agent-sidebar-spawned` window
     /// option). Used by the row renderer to show a clickable red `×`

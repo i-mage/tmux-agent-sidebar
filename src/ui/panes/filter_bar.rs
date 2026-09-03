@@ -248,6 +248,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             custom_name: String::new(),
+            ordinal: 0,
             sidebar_spawned: false,
             bg_shell_cmd: None,
         };
@@ -270,6 +271,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             custom_name: String::new(),
+            ordinal: 0,
             sidebar_spawned: false,
             bg_shell_cmd: None,
         };

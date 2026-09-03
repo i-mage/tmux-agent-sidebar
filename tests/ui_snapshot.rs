@@ -307,6 +307,7 @@ fn snapshot_two_agents_same_window_ui() {
         session_id: None,
         session_name: String::new(),
         custom_name: String::new(),
+        ordinal: 0,
         sidebar_spawned: false,
         bg_shell_cmd: None,
     };
@@ -329,6 +330,7 @@ fn snapshot_two_agents_same_window_ui() {
         session_id: None,
         session_name: String::new(),
         custom_name: String::new(),
+        ordinal: 0,
         sidebar_spawned: false,
         bg_shell_cmd: None,
     };
