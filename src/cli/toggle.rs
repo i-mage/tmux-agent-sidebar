@@ -20,6 +20,18 @@ pub(crate) fn cmd_toggle(args: &[String]) -> i32 {
     };
     let pane_path = positional.get(1).copied().unwrap_or("~");
 
+    // Global hide (mobile mode): an explicit `toggle` still works, but the
+    // implicit create-only path (after-new-window hook, jump follow) must
+    // not resurrect sidebars the user just hid everywhere.
+    if create_only
+        && create_only_suppressed(&tmux::display_message(
+            window_id,
+            &format!("#{{{}}}", tmux::SIDEBAR_GLOBAL_HIDDEN),
+        ))
+    {
+        return 0;
+    }
+
     // Check sidebar width setting
     let sidebar_width_setting = {
         let s = tmux::display_message(window_id, &format!("#{{{}}}", tmux::SIDEBAR_WIDTH));
@@ -159,6 +171,13 @@ pub(crate) fn cmd_toggle_all(_args: &[String]) -> i32 {
     }
 
     0
+}
+
+/// `@sidebar_global_hidden` gates only the implicit create-only path.
+/// Anything but an explicit `on` (unset, empty, `off`, garbage) keeps the
+/// historical behaviour, so a typo can never silently disable auto-create.
+fn create_only_suppressed(setting: &str) -> bool {
+    setting.trim().eq_ignore_ascii_case("on")
 }
 
 fn any_sidebar_pane(output: &str) -> bool {
@@ -349,6 +368,15 @@ fn pane_id_role_format() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn create_only_suppressed_only_by_explicit_on() {
+        assert!(create_only_suppressed("on"));
+        assert!(create_only_suppressed(" ON \n"));
+        assert!(!create_only_suppressed("off"));
+        assert!(!create_only_suppressed(""));
+        assert!(!create_only_suppressed("1"));
+    }
 
     #[test]
     fn any_sidebar_pane_detects_sidebar_anywhere() {

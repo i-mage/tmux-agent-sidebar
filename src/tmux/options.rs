@@ -83,6 +83,10 @@ pub const PANE_WORKTREE_NAME: &str = "@pane_worktree_name";
 // ─── Sidebar global option keys ─────────────────────────────────────
 
 pub const SIDEBAR_PID: &str = "@sidebar_pid";
+/// Global "mobile mode" flag set by an external hide-all script: while
+/// `on`, `toggle --create-only` (the auto-create hook) is a no-op so a
+/// window opened from the phone does not grow a sidebar again.
+pub const SIDEBAR_GLOBAL_HIDDEN: &str = "@sidebar_global_hidden";
 pub const SIDEBAR_WIDTH: &str = "@sidebar_width";
 pub const SIDEBAR_POSITION: &str = "@sidebar_position";
 pub const SIDEBAR_FILTER: &str = "@sidebar_filter";
