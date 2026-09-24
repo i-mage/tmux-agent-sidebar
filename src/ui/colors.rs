@@ -32,6 +32,9 @@ pub struct ColorTheme {
     pub port: Color,
     pub wait_reason: Color,
     pub selection_bg: Color,
+    /// Fork-local: background behind every row of the pane focused in tmux,
+    /// so the active agent reads as one block rather than a thin marker.
+    pub active_bg: Color,
     pub branch: Color,
     pub badge_danger: Color,
     pub badge_auto: Color,
@@ -72,6 +75,7 @@ impl Default for ColorTheme {
             port: Color::Indexed(246),
             wait_reason: Color::Indexed(221),
             selection_bg: Color::Indexed(239),
+            active_bg: Color::Indexed(236),
             branch: Color::Indexed(109),
             badge_danger: Color::Indexed(167),
             badge_auto: Color::Indexed(221),
@@ -128,6 +132,7 @@ impl ColorTheme {
         theme.port = read(tmux::SIDEBAR_COLOR_PORT, theme.port);
         theme.wait_reason = read(tmux::SIDEBAR_COLOR_WAIT_REASON, theme.wait_reason);
         theme.selection_bg = read(tmux::SIDEBAR_COLOR_SELECTION, theme.selection_bg);
+        theme.active_bg = read(tmux::SIDEBAR_COLOR_ACTIVE_BG, theme.active_bg);
         theme.branch = read(tmux::SIDEBAR_COLOR_BRANCH, theme.branch);
         theme.task_progress = read(tmux::SIDEBAR_COLOR_TASK_PROGRESS, theme.task_progress);
         theme.subagent = read(tmux::SIDEBAR_COLOR_SUBAGENT, theme.subagent);

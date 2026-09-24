@@ -37,21 +37,20 @@ pub(super) fn render_pane_lines_with_ports(
     now: u64,
     show_branch: bool,
 ) -> Vec<Line<'static>> {
+    // Fork-local: the pane focused in tmux (`active`) is painted as one
+    // block, `active_bg` behind every row plus the `┃` marker down its
+    // whole height. The sidebar cursor (`selected`) keeps its own
+    // selection background on the status and branch rows.
+    let active_bg = if active { Some(theme.active_bg) } else { None };
     let bg = if selected {
         Some(theme.selection_bg)
     } else {
-        None
+        active_bg
     };
     let apply_bg = |style: Style| match bg {
         Some(c) => style.bg(c),
         None => style,
     };
-    // The left marker `┃` highlights the pane that is currently focused in
-    // tmux (`active`). To keep the active accent compact, it only appears on
-    // the status row and the branch/ports row (when present) — never on
-    // deeper details like task progress or prompt wrapping. The sidebar
-    // cursor position (`selected`) still paints the full pane with the
-    // selection background.
     let marker_ctx = RowCtx {
         marker_char: if active { SELECTION_MARKER } else { " " },
         marker_style: if active {
@@ -65,11 +64,14 @@ pub(super) fn render_pane_lines_with_ports(
         active,
     };
     let plain_ctx = RowCtx {
-        marker_char: " ",
-        marker_style: Style::default(),
+        marker_char: if active { SELECTION_MARKER } else { " " },
+        marker_style: match active_bg {
+            Some(c) => Style::default().fg(theme.accent).bg(c),
+            None => Style::default(),
+        },
         inner_width: width.saturating_sub(2),
         theme,
-        bg: None,
+        bg: active_bg,
         active,
     };
 

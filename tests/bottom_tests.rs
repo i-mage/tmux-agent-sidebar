@@ -819,9 +819,9 @@ fn snapshot_subagents_tree_ui() {
     ⓘ                                    — ▾
     project
     ┃ ● claude
-        ├ Explore #1
-        ├ Plan #2
-        └ Explore #2
+    ┃   ├ Explore #1
+    ┃   ├ Plan #2
+    ┃   └ Explore #2
     ╭ Activity │ Git ──────────────────────╮
     │            No activity yet           │
     ╰──────────────────────────────────────╯
@@ -856,8 +856,8 @@ fn snapshot_subagent_long_name_truncated_ui() {
     ⓘ                        — ▾
     project
     ┃ ● claude
-        ├ superpowers:code-revi…
-        └ claude-code-guide #2
+    ┃   ├ superpowers:code-revi…
+    ┃   └ claude-code-guide #2
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
@@ -892,7 +892,7 @@ fn snapshot_activity_empty_centered_ui() {
     ⓘ                        — ▾
     project
     ┃ ○ claude
-        Waiting for prompt…
+    ┃   Waiting for prompt…
     ╭ Activity │ Git ──────────╮
     │      No activity yet     │
     ╰──────────────────────────╯
@@ -923,7 +923,7 @@ fn snapshot_git_clean_centered_ui() {
     ⓘ                        — ▾
     project
     ┃ ○ claude
-        Waiting for prompt…
+    ┃   Waiting for prompt…
     ╭ Activity │ Git ──────────╮
     │    Working tree clean    │
     ╰──────────────────────────╯
@@ -1549,7 +1549,7 @@ fn test_pet_enabled_preserves_bottom_panel_border() {
     ⓘ                                    — ▾
     project
     ┃ ○ claude
-        Waiting for prompt…
+    ┃   Waiting for prompt…
       ▄ ▄
      ▄▀▀▀▄                             ████
       ▀ ▀                           ██ █  █

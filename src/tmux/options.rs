@@ -118,6 +118,8 @@ pub const SIDEBAR_COLOR_SESSION: &str = "@sidebar_color_session";
 pub const SIDEBAR_COLOR_PORT: &str = "@sidebar_color_port";
 pub const SIDEBAR_COLOR_WAIT_REASON: &str = "@sidebar_color_wait_reason";
 pub const SIDEBAR_COLOR_SELECTION: &str = "@sidebar_color_selection";
+// Fork-local: background painted behind every row of the focused pane.
+pub const SIDEBAR_COLOR_ACTIVE_BG: &str = "@sidebar_color_active_bg";
 pub const SIDEBAR_COLOR_BRANCH: &str = "@sidebar_color_branch";
 pub const SIDEBAR_COLOR_TASK_PROGRESS: &str = "@sidebar_color_task_progress";
 pub const SIDEBAR_COLOR_SUBAGENT: &str = "@sidebar_color_subagent";
