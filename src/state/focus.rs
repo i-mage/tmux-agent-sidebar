@@ -99,6 +99,11 @@ impl AppState {
             // `run_pending_activation`, after the event loop has painted.
             self.focus_state.focused_pane_id = Some(target_pane_id.clone());
             self.focus_state.pending_activation = Some(target_pane_id);
+            // The click that got us here gave tmux focus to the sidebar
+            // itself, which would paint the cursor's selection colour over
+            // the active block until the jump lands. Focus is leaving the
+            // sidebar anyway, so paint the final state right away.
+            self.focus_state.sidebar_focused = false;
         }
     }
 
@@ -108,15 +113,46 @@ impl AppState {
         let Some(target_pane_id) = self.focus_state.pending_activation.take() else {
             return false;
         };
-        tmux::select_pane(&target_pane_id);
+        // Fork-local: one query for everything the jump needs.
+        let info = tmux::display_message(
+            &target_pane_id,
+            "#{window_id}\t#{pane_current_path}",
+        );
+        let (window_id, pane_path) = info.split_once('\t').unwrap_or((info.as_str(), ""));
+        let (window_id, pane_path) = (window_id.to_string(), pane_path.to_string());
+        let same_window = self.pane_in_own_window(&window_id);
+
+        // Make the target the active pane of its window first. select-pane
+        // does not switch windows, so a cross-window jump can wake the
+        // sidebar there and let it repaint its highlight while still
+        // hidden; switching afterwards shows the right row immediately
+        // instead of the stale one for a few frames.
+        let _ = tmux::run_tmux(&["select-pane", "-t", &target_pane_id]);
+        if !same_window && !window_id.is_empty() {
+            // The click left tmux focus on this sidebar. Hand it back to the
+            // pane that had it, or coming back to this window later sends
+            // keystrokes into the sidebar, where letters flip the global
+            // status filter.
+            let _ = tmux::run_tmux(&["last-pane", "-t", &self.tmux_pane]);
+            if signal_window_sidebars(&window_id) {
+                std::thread::sleep(std::time::Duration::from_millis(30));
+            }
+            let _ = tmux::run_tmux(&[
+                "switch-client",
+                "-t",
+                &target_pane_id,
+                ";",
+                "select-window",
+                "-t",
+                &target_pane_id,
+            ]);
+        }
 
         // The jump may land on a window that has no sidebar of its own
         // (e.g. with @sidebar_auto_create off). Summon one there so the
         // sidebar "follows" the jump instead of disappearing. create-only
         // is a no-op when that window already has a sidebar.
-        let window_id = tmux::display_message(&target_pane_id, "#{window_id}");
         if !window_id.is_empty() {
-            let pane_path = tmux::display_message(&target_pane_id, "#{pane_current_path}");
             let pane_path = if pane_path.is_empty() {
                 "~".to_string()
             } else {
@@ -126,6 +162,24 @@ impl AppState {
         }
         true
     }
+
+    fn pane_in_own_window(&self, window_id: &str) -> bool {
+        tmux::display_message(&self.tmux_pane, "#{window_id}") == window_id
+    }
+}
+
+/// Send SIGUSR1 to every sidebar in `window_id`. Returns true when at
+/// least one was signalled, so the caller knows a repaint is coming.
+fn signal_window_sidebars(window_id: &str) -> bool {
+    let pids = tmux::run_tmux(&["list-panes", "-t", window_id, "-F", "#{@sidebar_pid}"])
+        .unwrap_or_default();
+    let mut any = false;
+    for pid in pids.lines().filter_map(|l| l.trim().parse::<i32>().ok()) {
+        if pid > 0 && unsafe { libc::kill(pid, libc::SIGUSR1) } == 0 {
+            any = true;
+        }
+    }
+    any
 }
 
 #[cfg(test)]

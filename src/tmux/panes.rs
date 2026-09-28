@@ -25,10 +25,15 @@ pub fn get_pane_path(pane_id: &str) -> Option<String> {
 /// Query tmux for all panes in the active window, returning (pane_id, pane_active, path).
 /// This queries tmux directly and is NOT filtered by agent type, so it includes
 /// all panes (shell, editor, etc.) — not just agent panes.
-pub fn query_active_window_panes() -> Vec<(String, bool, String)> {
-    // List panes in the current (active) window across all sessions
+pub fn query_active_window_panes(sidebar_pane: &str) -> Vec<(String, bool, String)> {
+    // Fork-local: list the panes of the sidebar's OWN window. Without `-t`
+    // tmux lists the window currently on screen, so a sidebar in a window
+    // being switched to kept its stale highlight until the switch landed
+    // and the next refresh ran, and it flashed the old row.
     let output = match run_tmux(&[
         "list-panes",
+        "-t",
+        sidebar_pane,
         "-F",
         "#{pane_id}|#{pane_active}|#{pane_current_path}",
     ]) {
@@ -51,7 +56,7 @@ pub fn query_active_window_panes() -> Vec<(String, bool, String)> {
 /// Returns all panes regardless of agent type, so activity/git info can be shown
 /// even for non-agent panes.
 pub fn find_active_pane(sidebar_pane: &str) -> Option<(String, String)> {
-    pick_active_pane(sidebar_pane, &query_active_window_panes())
+    pick_active_pane(sidebar_pane, &query_active_window_panes(sidebar_pane))
 }
 
 /// Pure logic: pick the active non-sidebar pane from a list.
