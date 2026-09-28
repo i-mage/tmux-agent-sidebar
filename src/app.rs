@@ -74,6 +74,14 @@ pub fn run(
             }
         }
 
+        // Fork-local: paint the clicked row as active before the tmux jump,
+        // which is several blocking subprocesses and felt like a freeze.
+        if state.focus_state.pending_activation.is_some() {
+            render::render_frame(terminal, &mut state)?;
+            needs_redraw = false;
+            state.run_pending_activation();
+        }
+
         if last_spinner.elapsed() >= spinner_interval {
             state.spinner_frame = (state.spinner_frame + 1) % SPINNER_PULSE.len();
             if state.pet_enabled {
@@ -87,6 +95,15 @@ pub fn run(
         let sigusr1 = needs_refresh.swap(false, Ordering::Relaxed);
         if sigusr1 || last_refresh.elapsed() >= refresh_interval {
             let previous_focused_pane_id = state.focus_state.focused_pane_id.clone();
+            // Fork-local: SIGUSR1 means focus moved. The full refresh below
+            // snapshots every process and is slow under load, so move the
+            // highlight with one cheap tmux query and paint it first.
+            if sigusr1 {
+                state.find_focused_pane();
+                if state.focus_state.focused_pane_id != previous_focused_pane_id {
+                    render::render_frame(terminal, &mut state)?;
+                }
+            }
             let is_window_active = state.refresh();
             if state.focus_state.focused_pane_id != previous_focused_pane_id {
                 render::refresh_git_for_focused_pane(&mut state);

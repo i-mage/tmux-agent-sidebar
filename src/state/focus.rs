@@ -15,6 +15,11 @@ pub struct FocusState {
     pub focus: Focus,
     pub focused_pane_id: Option<String>,
     pub prev_focused_pane_id: Option<String>,
+    /// Fork-local: pane a click/Enter asked to jump to. The event loop
+    /// paints the new highlight first and only then runs the tmux jump,
+    /// so the row lights up on the next frame instead of after a chain
+    /// of blocking tmux subprocesses.
+    pub pending_activation: Option<String>,
 }
 
 impl FocusState {
@@ -24,6 +29,7 @@ impl FocusState {
             focus: Focus::Panes,
             focused_pane_id: None,
             prev_focused_pane_id: None,
+            pending_activation: None,
         }
     }
 }
@@ -89,29 +95,36 @@ impl AppState {
         {
             // Update the sidebar immediately so the active marker and
             // repo header highlight move without waiting for the next
-            // periodic tmux refresh.
+            // periodic tmux refresh. The tmux side runs in
+            // `run_pending_activation`, after the event loop has painted.
             self.focus_state.focused_pane_id = Some(target_pane_id.clone());
-            tmux::select_pane(&target_pane_id);
-
-            // The jump may land on a window that has no sidebar of its own
-            // (e.g. with @sidebar_auto_create off). Summon one there so the
-            // sidebar "follows" the jump instead of disappearing. create-only
-            // is a no-op when that window already has a sidebar.
-            let window_id = tmux::display_message(&target_pane_id, "#{window_id}");
-            if !window_id.is_empty() {
-                let pane_path = tmux::display_message(&target_pane_id, "#{pane_current_path}");
-                let pane_path = if pane_path.is_empty() {
-                    "~".to_string()
-                } else {
-                    pane_path
-                };
-                crate::cli::toggle::cmd_toggle(&[
-                    "--create-only".to_string(),
-                    window_id,
-                    pane_path,
-                ]);
-            }
+            self.focus_state.pending_activation = Some(target_pane_id);
         }
+    }
+
+    /// Perform the tmux jump queued by [`Self::activate_selected_pane`].
+    /// Returns true when a jump ran.
+    pub fn run_pending_activation(&mut self) -> bool {
+        let Some(target_pane_id) = self.focus_state.pending_activation.take() else {
+            return false;
+        };
+        tmux::select_pane(&target_pane_id);
+
+        // The jump may land on a window that has no sidebar of its own
+        // (e.g. with @sidebar_auto_create off). Summon one there so the
+        // sidebar "follows" the jump instead of disappearing. create-only
+        // is a no-op when that window already has a sidebar.
+        let window_id = tmux::display_message(&target_pane_id, "#{window_id}");
+        if !window_id.is_empty() {
+            let pane_path = tmux::display_message(&target_pane_id, "#{pane_current_path}");
+            let pane_path = if pane_path.is_empty() {
+                "~".to_string()
+            } else {
+                pane_path
+            };
+            crate::cli::toggle::cmd_toggle(&["--create-only".to_string(), window_id, pane_path]);
+        }
+        true
     }
 }
 
