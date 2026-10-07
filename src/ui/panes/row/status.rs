@@ -66,7 +66,13 @@ pub(super) fn status_row(
     let title_budget = ctx
         .inner_width
         .saturating_sub(fixed_width + elapsed_gap + elapsed_width);
-    let title = truncate_to_width(title_raw, title_budget);
+    // Fork-local: Playground car mode puts the agent's own car before its name.
+    let title_full = if pane.car_emoji.is_empty() {
+        title_raw.to_string()
+    } else {
+        format!("{} {}", pane.car_emoji, title_raw)
+    };
+    let title = truncate_to_width(&title_full, title_budget);
 
     let left_width = fixed_width + display_width(&title);
     let available_for_elapsed = ctx.inner_width.saturating_sub(left_width);

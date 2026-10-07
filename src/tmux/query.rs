@@ -58,6 +58,9 @@ pub(super) mod pane_line_field {
     pub const SESSION_ID: usize = 19; // absolute 25 (@pane_session_id)
     pub const SIDEBAR_SPAWNED: usize = 20; // absolute 26 (@agent-sidebar-spawned)
     pub const BG_CMD: usize = 21; // absolute 27 (@pane_bg_cmd)
+    // Fork-local, optional (read with `get`, not counted in MIN_FIELDS):
+    pub const CAR_MODE: usize = 22; // absolute 28 (@car_mode)
+    pub const CAR_EMOJI: usize = 23; // absolute 29 (@car_emoji)
     /// Minimum number of fields the pane-line suffix must contain.
     /// Equals `session_line_field::MIN_FIELDS - PANE_LINE_OFFSET`.
     pub const MIN_FIELDS: usize = 22;
@@ -96,6 +99,8 @@ fn pane_format() -> String {
         q(PANE_SESSION_ID),
         q(SPAWNED_OPTION),
         q(PANE_BG_CMD),
+        q("@car_mode"),
+        q("@car_emoji"),
     ]
     .join("|")
 }
@@ -340,6 +345,10 @@ fn parse_pane_fields_with_processes(
         session_id,
         session_name: String::new(),
         custom_name: parts[pane_line_field::PANE_NAME_FIELD].to_string(),
+        car_emoji: car_emoji(
+            parts.get(pane_line_field::CAR_MODE).map(|s| s.as_str()),
+            parts.get(pane_line_field::CAR_EMOJI).map(|s| s.as_str()),
+        ),
         ordinal: 0,
         sidebar_spawned: parts[pane_line_field::SIDEBAR_SPAWNED] == "1",
         bg_shell_cmd: {
@@ -351,6 +360,18 @@ fn parse_pane_fields_with_processes(
             }
         },
     })
+}
+
+/// Fork-local: the car shown before an agent's name while Playground car
+/// mode is on. Each voice has its own car; 🚗 when the pane carries no emoji.
+fn car_emoji(mode: Option<&str>, emoji: Option<&str>) -> String {
+    if mode != Some("on") {
+        return String::new();
+    }
+    match emoji {
+        Some(e) if !e.is_empty() => e.to_string(),
+        _ => "🚗".to_string(),
+    }
 }
 
 /// Wipe all agent-tracked tmux pane options and the activity log file for
@@ -605,6 +626,7 @@ mod tests {
             session_id: None,
             session_name: String::new(),
             custom_name: String::new(),
+            car_emoji: String::new(),
             ordinal: 0,
             sidebar_spawned: false,
             bg_shell_cmd: None,
@@ -1193,6 +1215,7 @@ mod tests {
                     session_id: None,
                     session_name: String::new(),
                     custom_name: String::new(),
+                    car_emoji: String::new(),
                     ordinal: 0,
                     sidebar_spawned: false,
                     bg_shell_cmd: None,
@@ -1316,5 +1339,28 @@ mod tests {
             Some(0),
             "retained pane should be the zero-pid one"
         );
+    }
+}
+
+#[cfg(test)]
+mod car_emoji_tests {
+    use super::car_emoji;
+
+    #[test]
+    fn car_mode_off_shows_nothing() {
+        assert_eq!(car_emoji(None, None), "");
+        assert_eq!(car_emoji(Some(""), Some("🚕")), "");
+    }
+
+    #[test]
+    fn car_mode_on_shows_the_voice_car() {
+        assert_eq!(car_emoji(Some("on"), Some("🚕")), "🚕");
+        assert_eq!(car_emoji(Some("on"), Some("🚙")), "🚙");
+    }
+
+    #[test]
+    fn car_mode_on_without_emoji_falls_back() {
+        assert_eq!(car_emoji(Some("on"), Some("")), "🚗");
+        assert_eq!(car_emoji(Some("on"), None), "🚗");
     }
 }
