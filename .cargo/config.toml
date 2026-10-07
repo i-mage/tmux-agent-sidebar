@@ -1,0 +1,10 @@
+# Fork-local: keep `cargo test` away from the live tmux server. Several tests
+# drive code that runs `tmux set -g @sidebar_filter …`; run inside tmux, they
+# rewrote the owner's real sidebar filter and left every sidebar with an empty
+# list. Empty TMUX + a private TMUX_TMPDIR points the tmux client at a socket
+# with no server behind it, so those writes fail harmlessly. Applies to the
+# processes cargo spawns (tests, `cargo run`), never to the installed binary.
+[env]
+TMUX = { value = "", force = true }
+TMUX_PANE = { value = "", force = true }
+TMUX_TMPDIR = { value = "target/tmux-test-socket", relative = true, force = true }

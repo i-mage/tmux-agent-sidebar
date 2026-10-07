@@ -121,14 +121,14 @@ pub(super) fn handle_key_event(
         KeyCode::Char('h') | KeyCode::Left => {
             if state.focus_state.focus == Focus::Filter {
                 state.global.status_filter = state.global.status_filter.prev();
-                state.global.save_filter();
+                state.global.save_filter("key-left");
                 state.rebuild_row_targets();
             }
         }
         KeyCode::Char('l') | KeyCode::Right => {
             if state.focus_state.focus == Focus::Filter {
                 state.global.status_filter = state.global.status_filter.next();
-                state.global.save_filter();
+                state.global.save_filter("key-right");
                 state.rebuild_row_targets();
             }
         }
@@ -152,10 +152,16 @@ pub(super) fn handle_key_event(
                 state.activate_selected_pane();
             }
         }
+        // Fork-local: Tab cycles the filter only while the filter row has
+        // focus. Unguarded, a Tab typed into a focused sidebar (meant for the
+        // agent next to it) switched every sidebar to `running` and emptied
+        // the list as soon as no agent was running.
         KeyCode::Tab => {
-            state.global.status_filter = state.global.status_filter.next();
-            state.global.save_filter();
-            state.rebuild_row_targets();
+            if state.focus_state.focus == Focus::Filter {
+                state.global.status_filter = state.global.status_filter.next();
+                state.global.save_filter("key-tab");
+                state.rebuild_row_targets();
+            }
         }
         KeyCode::BackTab => {
             state.next_bottom_tab();

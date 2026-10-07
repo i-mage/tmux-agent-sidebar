@@ -43,7 +43,8 @@ impl GlobalState {
     /// Save filter to tmux global variable.
     /// Only updates `last_saved_filter` on success so that a failed write
     /// does not cause sync to overwrite the user's choice.
-    pub fn save_filter(&mut self) {
+    pub fn save_filter(&mut self, source: &str) {
+        log_filter_change(self.last_saved_filter, self.status_filter, source);
         if tmux::run_tmux(&[
             "set",
             "-g",
@@ -145,5 +146,30 @@ impl GlobalState {
                 self.last_saved_repo_filter = tmux_repo;
             }
         }
+    }
+}
+
+/// Fork-local: append every filter change to a log, with what caused it.
+/// The filter is global, so one stray input leaves every sidebar with
+/// header counts and an empty list; this records which input it was.
+fn log_filter_change(from: StatusFilter, to: StatusFilter, source: &str) {
+    use std::io::Write;
+    if from == to {
+        return;
+    }
+    let Some(home) = std::env::var_os("HOME") else { return };
+    let path = std::path::Path::new(&home).join(".cache/tmux-agent-sidebar-filter.log");
+    let _ = std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new(".")));
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Only a sidebar running in tmux logs; `cargo test` clears TMUX_PANE.
+    let pane = std::env::var("TMUX_PANE").unwrap_or_default();
+    if pane.is_empty() {
+        return;
+    }
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(f, "{secs} {pane} {} -> {} via {source}", from.as_str(), to.as_str());
     }
 }

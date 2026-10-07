@@ -151,7 +151,7 @@ impl AppState {
             }
             if col >= x && col < x + width {
                 self.global.status_filter = *filter;
-                self.global.save_filter();
+                self.global.save_filter("click-header");
                 self.rebuild_row_targets();
                 return;
             }
