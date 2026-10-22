@@ -59,8 +59,8 @@ pub(super) mod pane_line_field {
     pub const SIDEBAR_SPAWNED: usize = 20; // absolute 26 (@agent-sidebar-spawned)
     pub const BG_CMD: usize = 21; // absolute 27 (@pane_bg_cmd)
     // Fork-local, optional (read with `get`, not counted in MIN_FIELDS):
-    pub const CAR_MODE: usize = 22; // absolute 28 (@car_mode)
-    pub const CAR_EMOJI: usize = 23; // absolute 29 (@car_emoji)
+    pub const CAR_MODE: usize = 22; // absolute 28 (@voice_mode)
+    pub const CAR_EMOJI: usize = 23; // absolute 29 (@voice_emoji)
     /// Minimum number of fields the pane-line suffix must contain.
     /// Equals `session_line_field::MIN_FIELDS - PANE_LINE_OFFSET`.
     pub const MIN_FIELDS: usize = 22;
@@ -99,8 +99,8 @@ fn pane_format() -> String {
         q(PANE_SESSION_ID),
         q(SPAWNED_OPTION),
         q(PANE_BG_CMD),
-        q("@car_mode"),
-        q("@car_emoji"),
+        q("@voice_mode"),
+        q("@voice_emoji"),
     ]
     .join("|")
 }
@@ -362,15 +362,16 @@ fn parse_pane_fields_with_processes(
     })
 }
 
-/// Fork-local: the car shown before an agent's name while Playground car
-/// mode is on. Each voice has its own car; 🚗 when the pane carries no emoji.
+/// Fork-local: the character shown before an agent's name while Playground
+/// voice mode is on (renamed from car mode 22. 10. 2026). Each voice has its
+/// own character; 👩🏻 when the pane carries no emoji.
 fn car_emoji(mode: Option<&str>, emoji: Option<&str>) -> String {
     if mode != Some("on") {
         return String::new();
     }
     match emoji {
         Some(e) if !e.is_empty() => e.to_string(),
-        _ => "🚗".to_string(),
+        _ => "👩🏻".to_string(),
     }
 }
 
@@ -1349,18 +1350,18 @@ mod car_emoji_tests {
     #[test]
     fn car_mode_off_shows_nothing() {
         assert_eq!(car_emoji(None, None), "");
-        assert_eq!(car_emoji(Some(""), Some("🚕")), "");
+        assert_eq!(car_emoji(Some(""), Some("👱🏻‍♂️")), "");
     }
 
     #[test]
     fn car_mode_on_shows_the_voice_car() {
-        assert_eq!(car_emoji(Some("on"), Some("🚕")), "🚕");
-        assert_eq!(car_emoji(Some("on"), Some("🚙")), "🚙");
+        assert_eq!(car_emoji(Some("on"), Some("👱🏻‍♂️")), "👱🏻‍♂️");
+        assert_eq!(car_emoji(Some("on"), Some("👩🏻‍🦰")), "👩🏻‍🦰");
     }
 
     #[test]
     fn car_mode_on_without_emoji_falls_back() {
-        assert_eq!(car_emoji(Some("on"), Some("")), "🚗");
-        assert_eq!(car_emoji(Some("on"), None), "🚗");
+        assert_eq!(car_emoji(Some("on"), Some("")), "👩🏻");
+        assert_eq!(car_emoji(Some("on"), None), "👩🏻");
     }
 }
