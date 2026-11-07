@@ -38,7 +38,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
             continue;
         }
 
-        if !first_group {
+        if !first_group && state.group_gap {
             // Separate repo groups, but do not add a leading blank before
             // the first repo so the list starts immediately below the header.
             collected.lines.push(Line::from(""));
@@ -277,5 +277,43 @@ mod tests {
         ];
         let collected = collect(&state, 40);
         assert_eq!(collected.pending_spawn.len(), 3);
+    }
+
+    fn two_groups() -> Vec<RepoGroup> {
+        vec![
+            RepoGroup {
+                name: "a".into(),
+                has_focus: false,
+                panes: vec![(make_pane("%1", PaneStatus::Running), PaneGitInfo::default())],
+            },
+            RepoGroup {
+                name: "b".into(),
+                has_focus: false,
+                panes: vec![(make_pane("%2", PaneStatus::Running), PaneGitInfo::default())],
+            },
+        ]
+    }
+
+    fn blank_lines(collected: &CollectedRows) -> usize {
+        collected
+            .lines
+            .iter()
+            .filter(|l| l.spans.iter().all(|s| s.content.trim().is_empty()))
+            .count()
+    }
+
+    #[test]
+    fn collect_separates_repo_groups_with_a_blank_line_by_default() {
+        let mut state = AppState::new("%0".into());
+        state.repo_groups = two_groups();
+        assert_eq!(blank_lines(&collect(&state, 40)), 1);
+    }
+
+    #[test]
+    fn collect_drops_the_blank_line_between_groups_when_group_gap_is_off() {
+        let mut state = AppState::new("%0".into());
+        state.repo_groups = two_groups();
+        state.group_gap = false;
+        assert_eq!(blank_lines(&collect(&state, 40)), 0);
     }
 }

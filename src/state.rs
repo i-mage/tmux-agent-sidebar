@@ -125,6 +125,10 @@ pub struct AppState {
     /// Whether agent rows render the git branch line. Loaded once at startup
     /// from the `@sidebar_show_branch` tmux option (default: on).
     pub show_branch: bool,
+    /// Whether a blank line separates repo groups in the agent list. Loaded
+    /// once at startup from the fork-local `@sidebar_group_gap` tmux option
+    /// (default: on).
+    pub group_gap: bool,
     /// Maps session_id → session name, refreshed periodically from
     /// `~/.claude/sessions/*.json` files. The `dirty` flag is `true` when
     /// the map has changed since the last `refresh_session_names`
@@ -183,6 +187,7 @@ impl AppState {
             global: GlobalState::new(),
             bottom_panel_height: crate::ui::BOTTOM_PANEL_HEIGHT,
             show_branch: true,
+            group_gap: true,
             sessions: SessionNamesState::new(),
             pet_enabled: false,
         };

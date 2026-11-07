@@ -55,6 +55,25 @@ pub fn show_branch_from_tmux() -> bool {
     show_branch_from_options(&opts)
 }
 
+/// Read `@sidebar_group_gap` (fork-local) from tmux global options,
+/// defaulting to `true` (blank line between repo groups).
+/// `off`/`false`/`0`/`no` (case-insensitive) drop it.
+pub fn group_gap_from_options(opts: &HashMap<String, String>) -> bool {
+    opts.get(tmux::SIDEBAR_GROUP_GAP)
+        .map(|s| {
+            !matches!(
+                s.trim().to_ascii_lowercase().as_str(),
+                "off" | "false" | "0" | "no"
+            )
+        })
+        .unwrap_or(true)
+}
+
+pub fn group_gap_from_tmux() -> bool {
+    let opts = tmux::get_all_global_options();
+    group_gap_from_options(&opts)
+}
+
 /// Read `@sidebar_pet` from tmux global options, defaulting to `false` (off).
 /// Accepts `on`/`off`, `true`/`false`, `1`/`0` (case-insensitive).
 pub fn pet_enabled_from_options(opts: &HashMap<String, String>) -> bool {
