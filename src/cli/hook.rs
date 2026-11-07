@@ -5,6 +5,7 @@ use super::{read_stdin_json, tmux_pane};
 mod activity;
 mod context;
 mod handlers;
+mod live_text;
 mod notifications;
 
 use context::sync_pane_location;
@@ -137,7 +138,12 @@ fn handle_event(pane: &str, agent_name: &str, event: AgentEvent) -> i32 {
             tool_name,
             tool_input,
             tool_response,
-        } => activity::handle_activity_log(pane, &tool_name, &tool_input, &tool_response),
+            transcript_path,
+        } => {
+            let code = activity::handle_activity_log(pane, &tool_name, &tool_input, &tool_response);
+            live_text::update_from_transcript(pane, &transcript_path);
+            code
+        }
         AgentEvent::PermissionDenied {
             agent,
             cwd,

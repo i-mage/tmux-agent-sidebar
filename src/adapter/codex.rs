@@ -85,6 +85,7 @@ impl EventAdapter for CodexAdapter {
                     tool_name: tool_name.into(),
                     tool_input: json_value_or_null(input, "tool_input"),
                     tool_response: json_value_or_null(input, "tool_response"),
+                    transcript_path: String::new(),
                 })
             }
             _ => None,

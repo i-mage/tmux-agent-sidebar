@@ -9,11 +9,7 @@ mod branch;
 mod ctx;
 mod status;
 
-use body::{
-    activity_hint_row, background_hint_row, idle_hint_row, prompt_rows, subagent_rows,
-    task_progress_row,
-    wait_reason_row,
-};
+use body::{idle_hint_row, prompt_rows, subagent_rows, task_progress_row, wait_reason_row};
 use branch::branch_ports_row;
 use ctx::{RowCtx, SELECTION_MARKER};
 #[cfg(test)]
@@ -94,19 +90,11 @@ pub(super) fn render_pane_lines_with_ports(
     if let Some(line) = wait_reason_row(&pane.wait_reason, &pane.status, ctx) {
         out.push(line);
     }
-    if let Some(cmd) = pane.bg_shell_cmd.as_deref() {
-        out.push(background_hint_row(ctx, cmd));
-    }
-    // Fork-local: a running agent shows its live tool activity instead
-    // of the (stale) prompt; see activity_hint_row.
-    let live_activity = if matches!(pane.status, PaneStatus::Running) {
-        activity_hint_row(pane, ctx)
-    } else {
-        None
-    };
-    if let Some(line) = live_activity {
-        out.push(line);
-    } else if !pane.prompt.is_empty() {
+    // Fork-local (7. 11. 2026): the row shows text, never commands. A
+    // running agent's prompt option carries its newest text of the turn
+    // (written by the hook from the transcript, see cli/hook/live_text.rs),
+    // so neither the tool it calls nor a background shell command is shown.
+    if !pane.prompt.is_empty() {
         out.extend(prompt_rows(pane, ctx));
     } else if matches!(pane.status, PaneStatus::Idle) {
         out.push(idle_hint_row(ctx));
@@ -193,7 +181,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         let status = line_text(&lines[0]);
@@ -216,7 +204,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         let status = line_text(&lines[0]);
@@ -243,7 +231,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         let status = line_text(&lines[0]);
@@ -281,7 +269,7 @@ mod tests {
             &theme,
             0,
             66,
-            true
+            true,
         );
 
         let status = line_text(&lines[0]);
@@ -392,7 +380,7 @@ mod tests {
             &theme,
             0,
             1_000_000,
-            true
+            true,
         );
 
         let status = line_text(&lines[0]);
@@ -438,130 +426,12 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert_eq!(lines.len(), 2);
         let hint = line_text(&lines[1]);
         assert!(hint.contains("Waiting for prompt"));
-    }
-
-    #[test]
-    fn render_pane_lines_shows_bg_command_even_while_running() {
-        // A live background shell must stay visible in the pane
-        // regardless of the agent's current status — running bursts in
-        // the middle of a background task should not make the shell
-        // look like it vanished.
-        let theme = ColorTheme::default();
-        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "");
-        p.bg_shell_cmd = Some("npm run dev".into());
-        let lines = render_pane_lines_with_ports(
-            &p,
-            &PaneGitInfo::default(),
-            None,
-            None,
-            false,
-            false,
-            40,
-            &StatusIcons::default(),
-            &theme,
-            0,
-            0,
-            true
-        );
-
-        let hint = lines.iter().map(line_text).collect::<Vec<_>>().join("\n");
-        assert!(
-            hint.contains("npm run dev"),
-            "bg command must render during running state, got:\n{hint}"
-        );
-    }
-
-    #[test]
-    fn render_pane_lines_shows_bg_command_even_while_idle() {
-        let theme = ColorTheme::default();
-        let mut p = pane(PermissionMode::Default, PaneStatus::Idle, "");
-        p.bg_shell_cmd = Some("cargo watch".into());
-        let lines = render_pane_lines_with_ports(
-            &p,
-            &PaneGitInfo::default(),
-            None,
-            None,
-            false,
-            false,
-            40,
-            &StatusIcons::default(),
-            &theme,
-            0,
-            0,
-            true
-        );
-
-        let joined = lines.iter().map(line_text).collect::<Vec<_>>().join("\n");
-        assert!(
-            joined.contains("cargo watch"),
-            "bg command must render during idle state, got:\n{joined}"
-        );
-    }
-
-    #[test]
-    fn render_pane_lines_shows_background_command_when_known() {
-        let theme = ColorTheme::default();
-        let mut p = pane(PermissionMode::Default, PaneStatus::Background, "");
-        p.bg_shell_cmd = Some("cargo build --release".into());
-        let lines = render_pane_lines_with_ports(
-            &p,
-            &PaneGitInfo::default(),
-            None,
-            None,
-            false,
-            false,
-            40,
-            &StatusIcons::default(),
-            &theme,
-            0,
-            0,
-            true
-        );
-
-        assert_eq!(lines.len(), 2);
-        let hint = line_text(&lines[1]);
-        assert!(hint.contains("cargo build --release"), "got: {hint}");
-        assert!(
-            !hint.contains("Background shell running"),
-            "fallback text must not appear when a command is known, got: {hint}"
-        );
-    }
-
-    #[test]
-    fn render_pane_lines_truncates_long_background_command() {
-        let theme = ColorTheme::default();
-        let mut p = pane(PermissionMode::Default, PaneStatus::Background, "");
-        p.bg_shell_cmd = Some("cargo run --bin very-long-command-name --flag".into());
-        // Narrow width forces the ellipsis path in `truncate_to_width`.
-        let lines = render_pane_lines_with_ports(
-            &p,
-            &PaneGitInfo::default(),
-            None,
-            None,
-            false,
-            false,
-            20,
-            &StatusIcons::default(),
-            &theme,
-            0,
-            0,
-            true
-        );
-
-        let hint = line_text(&lines[1]);
-        assert!(hint.contains("cargo run"), "command missing in {hint}");
-        assert!(hint.contains('\u{2026}'), "ellipsis missing in {hint}");
-        assert!(
-            display_width(&hint) <= 20,
-            "row width {w} must not exceed inner_width 20: {hint}",
-            w = display_width(&hint)
-        );
     }
 
     #[test]
@@ -584,7 +454,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(lines.len() >= 2);
@@ -610,7 +480,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(lines.len() >= 3);
@@ -636,7 +506,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(lines.len() >= 5);
@@ -666,7 +536,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(lines.len() >= 3);
@@ -697,13 +567,61 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(lines.len() >= 2);
         let response_line = line_text(&lines[1]);
         assert!(response_line.contains("▷"));
         assert!(response_line.contains("Task completed successfully"));
+    }
+
+    /// Fork-local: a running row shows the agent's text, never the tool it
+    /// calls or a background shell command (owner, 7. 11. 2026: commands in
+    /// the sidebar are noise).
+    #[test]
+    fn render_pane_lines_running_shows_text_not_commands() {
+        let theme = ColorTheme::default();
+        let mut p = pane_with_response(
+            PermissionMode::Default,
+            PaneStatus::Running,
+            "Chyba je v row.rs",
+            true,
+        );
+        p.pane_id = "%live-text-test".into();
+        p.bg_shell_cmd = Some("npm run dev".into());
+        let log = crate::activity::log_file_path(&p.pane_id);
+        std::fs::write(&log, "10:00|Bash|cargo build --release\n").unwrap();
+        let lines = render_pane_lines_with_ports(
+            &p,
+            &PaneGitInfo::default(),
+            None,
+            None,
+            false,
+            false,
+            40,
+            &StatusIcons::default(),
+            &theme,
+            0,
+            0,
+            true,
+        );
+        std::fs::remove_file(&log).ok();
+        let text: Vec<String> = lines.iter().map(line_text).collect();
+        assert!(
+            text.iter().any(|l| l.contains("Chyba je v row.rs")),
+            "got: {text:?}"
+        );
+        assert!(
+            !text
+                .iter()
+                .any(|l| l.contains('⚙') || l.contains("cargo build")),
+            "got: {text:?}"
+        );
+        assert!(
+            !text.iter().any(|l| l.contains("npm run dev")),
+            "got: {text:?}"
+        );
     }
 
     #[test]
@@ -727,7 +645,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(lines.len() >= 2);
@@ -754,7 +672,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(lines.len() >= 2);
@@ -787,7 +705,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(lines.len() >= 2);
@@ -814,7 +732,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert_eq!(lines.len(), 2);
@@ -842,7 +760,8 @@ mod tests {
             is_worktree: true,
             worktree_name: None,
         };
-        let line = branch_ports_row(&git, None, false, true, &ctx).expect("branch row should render");
+        let line =
+            branch_ports_row(&git, None, false, true, &ctx).expect("branch row should render");
         let text = line_text(&line);
         assert!(text.contains("+ feat/x"), "plain + marker: {text}");
         assert!(!text.contains('×'), "non-spawned must not render ×");
@@ -859,7 +778,8 @@ mod tests {
             is_worktree: true,
             worktree_name: None,
         };
-        let line = branch_ports_row(&git, None, true, true, &ctx).expect("branch row should render");
+        let line =
+            branch_ports_row(&git, None, true, true, &ctx).expect("branch row should render");
         let text = line_text(&line);
         assert!(
             text.contains("+ feat/x"),
@@ -920,7 +840,8 @@ mod tests {
             is_worktree: true,
             worktree_name: None,
         };
-        let line = branch_ports_row(&git, None, true, true, &ctx).expect("branch row should render");
+        let line =
+            branch_ports_row(&git, None, true, true, &ctx).expect("branch row should render");
         let text = line_text(&line);
         assert!(
             text.contains('×'),
@@ -958,7 +879,8 @@ mod tests {
             is_worktree: true,
             worktree_name: None,
         };
-        let line = branch_ports_row(&git, None, true, true, &ctx).expect("branch row should render");
+        let line =
+            branch_ports_row(&git, None, true, true, &ctx).expect("branch row should render");
         let text = line_text(&line);
         let computed = sidebar_remove_marker_col(&git, None, true, ctx.inner_width, true)
             .expect("col should be Some");
@@ -1031,8 +953,8 @@ mod tests {
             worktree_name: None,
         };
         let ports = [3000u16];
-        let line =
-            branch_ports_row(&git, Some(&ports), true, true, &ctx).expect("branch row should render");
+        let line = branch_ports_row(&git, Some(&ports), true, true, &ctx)
+            .expect("branch row should render");
         let text = line_text(&line);
         assert_eq!(
             rendered_x_col(&text),
@@ -1061,7 +983,8 @@ mod tests {
             is_worktree: false,
             worktree_name: None,
         };
-        let line = branch_ports_row(&git, None, true, true, &ctx).expect("branch row should render");
+        let line =
+            branch_ports_row(&git, None, true, true, &ctx).expect("branch row should render");
         let text = line_text(&line);
         assert!(text.contains("main"));
         assert!(!text.contains('×'));
@@ -1098,7 +1021,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         // Every inner (non-marker) span on the status line must carry the selection bg.
@@ -1130,7 +1053,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         assert!(
@@ -1159,7 +1082,7 @@ mod tests {
             &theme,
             0,
             0,
-            true
+            true,
         );
 
         // The status row (line 0) must start with the SELECTION_MARKER in the

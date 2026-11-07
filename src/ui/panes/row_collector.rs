@@ -133,14 +133,13 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
             if pane.sidebar_spawned
                 && git_info.is_worktree
                 && pane_line_count >= 2
-                && let Some(x) =
-                    row::sidebar_remove_marker_col(
-                        git_info,
-                        ports,
-                        true,
-                        width.saturating_sub(2),
-                        state.show_branch,
-                    )
+                && let Some(x) = row::sidebar_remove_marker_col(
+                    git_info,
+                    ports,
+                    true,
+                    width.saturating_sub(2),
+                    state.show_branch,
+                )
             {
                 collected
                     .pending_remove

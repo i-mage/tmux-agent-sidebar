@@ -87,6 +87,9 @@ pub enum AgentEvent {
         tool_name: String,
         tool_input: Value,
         tool_response: Value,
+        /// Fork-local: the session transcript (Claude Code `transcript_path`),
+        /// empty when the agent does not send one.
+        transcript_path: String,
     },
     PermissionDenied {
         agent: String,

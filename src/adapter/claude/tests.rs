@@ -301,8 +301,21 @@ fn activity_log() {
             tool_name: "Read".into(),
             tool_input: json!({"file_path": "/a/b.rs"}),
             tool_response: Value::Null,
+            transcript_path: String::new(),
         }
     );
+}
+
+#[test]
+fn activity_log_carries_the_transcript_path() {
+    let adapter = ClaudeAdapter;
+    let input = json!({"tool_name": "Read", "tool_input": {}, "transcript_path": "/t/s.jsonl"});
+    match adapter.parse("activity-log", &input).unwrap() {
+        AgentEvent::ActivityLog {
+            transcript_path, ..
+        } => assert_eq!(transcript_path, "/t/s.jsonl"),
+        other => panic!("unexpected event: {other:?}"),
+    }
 }
 
 #[test]
@@ -316,6 +329,7 @@ fn activity_log_string_tool_input() {
             tool_name: "Edit".into(),
             tool_input: json!({"file_path": "/a/b.rs"}),
             tool_response: Value::Null,
+            transcript_path: String::new(),
         }
     );
 }
@@ -807,6 +821,7 @@ fn activity_log_with_tool_response() {
             tool_name: "TaskCreate".into(),
             tool_input: json!({"subject": "Fix bug"}),
             tool_response: json!({"task": {"id": "42"}}),
+            transcript_path: String::new(),
         }
     );
 }

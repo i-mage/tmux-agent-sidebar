@@ -120,6 +120,7 @@ impl EventAdapter for OpenCodeAdapter {
                     tool_name,
                     tool_input,
                     tool_response: json_value_or_null(input, "tool_response"),
+                    transcript_path: String::new(),
                 })
             }
             _ => None,
@@ -196,6 +197,7 @@ mod tests {
                 tool_name,
                 tool_input,
                 tool_response,
+                ..
             } => {
                 assert_eq!(tool_name, "Bash");
                 assert_eq!(tool_input["command"], "ls");
