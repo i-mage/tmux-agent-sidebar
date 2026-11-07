@@ -4,7 +4,13 @@
 # list. Empty TMUX + a private TMUX_TMPDIR points the tmux client at a socket
 # with no server behind it, so those writes fail harmlessly. Applies to the
 # processes cargo spawns (tests, `cargo run`), never to the installed binary.
+#
+# The directory must EXIST: when TMUX_TMPDIR names a missing directory, tmux
+# silently falls back to the default socket, i.e. the live server. The first
+# version pointed at target/tmux-test-socket, which nothing created, so every
+# test run still hit the live server (found 7. 11. 2026). .cargo/tmux-test/ is
+# committed; tests/tmux_isolation.rs guards it.
 [env]
 TMUX = { value = "", force = true }
 TMUX_PANE = { value = "", force = true }
-TMUX_TMPDIR = { value = "target/tmux-test-socket", relative = true, force = true }
+TMUX_TMPDIR = { value = ".cargo/tmux-test", relative = true, force = true }

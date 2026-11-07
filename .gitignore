@@ -6,3 +6,6 @@
 dist
 .astro
 node_modules
+
+# tmux socket dir created by cargo test (.cargo/config.toml)
+.cargo/tmux-test/tmux-*
