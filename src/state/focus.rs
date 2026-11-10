@@ -113,73 +113,88 @@ impl AppState {
         let Some(target_pane_id) = self.focus_state.pending_activation.take() else {
             return false;
         };
-        // Fork-local: one query for everything the jump needs.
-        let info = tmux::display_message(
-            &target_pane_id,
-            "#{window_id}\t#{pane_current_path}",
-        );
-        let (window_id, pane_path) = info.split_once('\t').unwrap_or((info.as_str(), ""));
-        let (window_id, pane_path) = (window_id.to_string(), pane_path.to_string());
-        let same_window = self.pane_in_own_window(&window_id);
-
-        // Make the target the active pane of its window first. select-pane
-        // does not switch windows, so a cross-window jump can wake the
-        // sidebar there and let it repaint its highlight while still
-        // hidden; switching afterwards shows the right row immediately
-        // instead of the stale one for a few frames.
-        let _ = tmux::run_tmux(&["select-pane", "-t", &target_pane_id]);
-        if !same_window && !window_id.is_empty() {
-            // The click left tmux focus on this sidebar. Hand it back to the
-            // pane that had it, or coming back to this window later sends
-            // keystrokes into the sidebar, where letters flip the global
-            // status filter.
-            let _ = tmux::run_tmux(&["last-pane", "-t", &self.tmux_pane]);
-            if signal_window_sidebars(&window_id) {
-                std::thread::sleep(std::time::Duration::from_millis(30));
-            }
-            let _ = tmux::run_tmux(&[
-                "switch-client",
-                "-t",
-                &target_pane_id,
-                ";",
-                "select-window",
-                "-t",
-                &target_pane_id,
-            ]);
-        }
+        // Fork-local: the whole jump is ONE tmux invocation. It used to be
+        // five client processes in a row (two queries, select-pane,
+        // last-pane, list-panes) before the window switched, which made a
+        // sidebar click visibly slower than a click on the status line.
+        let args = jump_args(&target_pane_id, &self.tmux_pane);
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let _ = tmux::run_tmux(&args);
 
         // The jump may land on a window that has no sidebar of its own
         // (e.g. with @sidebar_auto_create off). Summon one there so the
         // sidebar "follows" the jump instead of disappearing. create-only
-        // is a no-op when that window already has a sidebar.
+        // is a no-op when that window already has a sidebar. This runs
+        // after the switch, so its query costs nothing the eye can see.
+        let info = tmux::display_message(&target_pane_id, "#{window_id}\t#{pane_current_path}");
+        let (window_id, pane_path) = info.split_once('\t').unwrap_or((info.as_str(), ""));
         if !window_id.is_empty() {
-            let pane_path = if pane_path.is_empty() {
-                "~".to_string()
-            } else {
-                pane_path
-            };
-            crate::cli::toggle::cmd_toggle(&["--create-only".to_string(), window_id, pane_path]);
+            let pane_path = if pane_path.is_empty() { "~" } else { pane_path };
+            crate::cli::toggle::cmd_toggle(&[
+                "--create-only".to_string(),
+                window_id.to_string(),
+                pane_path.to_string(),
+            ]);
         }
         true
     }
-
-    fn pane_in_own_window(&self, window_id: &str) -> bool {
-        tmux::display_message(&self.tmux_pane, "#{window_id}") == window_id
-    }
 }
 
-/// Send SIGUSR1 to every sidebar in `window_id`. Returns true when at
-/// least one was signalled, so the caller knows a repaint is coming.
-fn signal_window_sidebars(window_id: &str) -> bool {
-    let pids = tmux::run_tmux(&["list-panes", "-t", window_id, "-F", "#{@sidebar_pid}"])
-        .unwrap_or_default();
-    let mut any = false;
-    for pid in pids.lines().filter_map(|l| l.trim().parse::<i32>().ok()) {
-        if pid > 0 && unsafe { libc::kill(pid, libc::SIGUSR1) } == 0 {
-            any = true;
-        }
-    }
-    any
+/// Arguments of the single `tmux` invocation that jumps from the sidebar
+/// pane `sidebar` to `target`. The server does every step itself:
+///
+/// 1. `select-pane` makes the target the active pane of its window. It does
+///    not switch windows.
+/// 2. Only for a target in another window: SIGUSR1 to the sidebars of that
+///    window and a 30 ms wait, so they repaint their highlight while still
+///    hidden and the switch shows the right row instead of the stale one.
+/// 3. `select-window` shows the target window.
+/// 4. Only for another window: the click left tmux focus on this sidebar.
+///    `last-pane` hands it back to the pane that had it, or coming back to
+///    this window later sends keystrokes into the sidebar, where letters
+///    flip the global status filter.
+/// 5. `switch-client` last: it only matters for a target in another
+///    session, and when it fails nothing after it is skipped.
+///
+/// "Another window" is decided by the server from the sidebar's own window:
+/// the list of its pane ids either contains the target or it does not.
+pub(crate) fn jump_args(target: &str, sidebar: &str) -> Vec<String> {
+    let cross = format!("#{{?#{{m:*{target} *,#{{P:#{{pane_id}} }}}},0,1}}");
+    let wake = format!(
+        "run-shell -t {target} 'kill -USR1 #{{P:#{{@sidebar_pid}} }} 2>/dev/null; true' ; run-shell -d 0.03"
+    );
+    let unfocus = format!("#{{&&:#{{pane_active}},{cross}}}");
+    let last = format!("last-pane -t {sidebar}");
+    [
+        "select-pane",
+        "-t",
+        target,
+        ";",
+        "if-shell",
+        "-F",
+        "-t",
+        sidebar,
+        &cross,
+        &wake,
+        ";",
+        "select-window",
+        "-t",
+        target,
+        ";",
+        "if-shell",
+        "-F",
+        "-t",
+        sidebar,
+        &unfocus,
+        &last,
+        ";",
+        "switch-client",
+        "-t",
+        target,
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
 }
 
 #[cfg(test)]
@@ -314,5 +329,153 @@ mod tests {
         assert!(state.move_pane_selection(1));
         assert_eq!(state.global.selected_pane_row, 1);
         assert!(!state.move_pane_selection(5));
+    }
+
+    // ─── jump_args: the one-call jump, on a private tmux server ──────
+
+    /// A throwaway tmux server on its own socket (inside the private
+    /// TMUX_TMPDIR that `.cargo/config.toml` forces), killed on drop.
+    struct JumpServer(String);
+
+    impl JumpServer {
+        fn start(name: &str) -> Option<Self> {
+            let server = Self(format!("jump-{name}-{}", std::process::id()));
+            let out = std::process::Command::new("tmux")
+                .args(["-L", &server.0, "-f", "/dev/null"])
+                .args(["new-session", "-d", "-s", "a", "-x", "120", "-y", "30"])
+                .output()
+                .ok()?; // no tmux binary: nothing to test against
+            assert!(out.status.success(), "private tmux server did not start");
+            Some(server)
+        }
+
+        fn run(&self, args: &[&str]) -> String {
+            let out = std::process::Command::new("tmux")
+                .args(["-L", &self.0, "-f", "/dev/null"])
+                .args(args)
+                .output()
+                .expect("tmux runs");
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+
+        fn jump(&self, target: &str, sidebar: &str) {
+            let args = jump_args(target, sidebar);
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            self.run(&args);
+        }
+
+        /// `window_active pane_active` of `pane`, e.g. "1 1".
+        fn flags(&self, pane: &str) -> String {
+            self.run(&[
+                "display-message",
+                "-t",
+                pane,
+                "-p",
+                "#{window_active} #{pane_active}",
+            ])
+        }
+    }
+
+    impl Drop for JumpServer {
+        fn drop(&mut self) {
+            self.run(&["kill-server"]);
+        }
+    }
+
+    /// Window 0: sidebar (focused, as after a click) + a work pane.
+    /// Window 1: the target + a second pane that is the active one.
+    fn jump_layout(server: &JumpServer) -> (String, String, String, String) {
+        let sidebar = server.run(&["display-message", "-p", "#{pane_id}"]);
+        let work = server.run(&["split-window", "-h", "-P", "-F", "#{pane_id}"]);
+        server.run(&["select-pane", "-t", &sidebar]);
+        let target = server.run(&["new-window", "-d", "-P", "-F", "#{pane_id}"]);
+        let other = server.run(&[
+            "split-window",
+            "-d",
+            "-t",
+            &target,
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ]);
+        server.run(&["select-pane", "-t", &other]);
+        (sidebar, work, target, other)
+    }
+
+    #[test]
+    fn jump_args_is_a_single_tmux_invocation_that_switches_window_and_pane() {
+        let Some(server) = JumpServer::start("cross") else {
+            return;
+        };
+        let (sidebar, work, target, other) = jump_layout(&server);
+        // Stand-in for the sidebar process of the target window.
+        let mut waker = std::process::Command::new("sleep")
+            .arg("300")
+            .spawn()
+            .unwrap();
+        server.run(&[
+            "set-option",
+            "-p",
+            "-t",
+            &other,
+            "@sidebar_pid",
+            &waker.id().to_string(),
+        ]);
+        assert_eq!(
+            server.flags(&target),
+            "0 0",
+            "target starts hidden and inactive"
+        );
+
+        server.jump(&target, &sidebar);
+
+        assert_eq!(
+            server.flags(&target),
+            "1 1",
+            "target window shown, target pane active"
+        );
+        assert_eq!(
+            server.flags(&sidebar),
+            "0 0",
+            "focus left the clicked sidebar"
+        );
+        assert_eq!(
+            server.flags(&work),
+            "0 1",
+            "focus went back to the pane that had it"
+        );
+        // SIGUSR1 terminates `sleep`, so an exited child proves the signal.
+        let mut signalled = false;
+        for _ in 0..100 {
+            if waker.try_wait().unwrap().is_some() {
+                signalled = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let _ = waker.kill();
+        assert!(signalled, "the sidebar of the target window got SIGUSR1");
+    }
+
+    #[test]
+    fn jump_args_inside_the_same_window_only_moves_the_pane() {
+        let Some(server) = JumpServer::start("same") else {
+            return;
+        };
+        let (sidebar, work, target, _other) = jump_layout(&server);
+
+        server.jump(&work, &sidebar);
+
+        assert_eq!(
+            server.flags(&work),
+            "1 1",
+            "work pane active, window unchanged"
+        );
+        assert_eq!(server.flags(&sidebar), "1 0");
+        assert_eq!(
+            server.flags(&target),
+            "0 0",
+            "the other window was left alone"
+        );
     }
 }
