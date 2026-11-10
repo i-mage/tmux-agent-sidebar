@@ -14,7 +14,9 @@ pub(super) struct RowCtx<'a> {
     pub(super) marker_char: &'static str,
     /// Style for the left marker (fg + optional bg already applied).
     pub(super) marker_style: Style,
-    /// Usable inner width for content after the marker and its trailing space.
+    /// Usable inner width for content after the marker. Fork-local
+    /// (owner, 10. 11. 2026): no separator space follows the marker, so
+    /// every row starts one column further left and the text gets it.
     pub(super) inner_width: usize,
     pub(super) theme: &'a ColorTheme,
     pub(super) bg: Option<Color>,
@@ -37,9 +39,8 @@ impl RowCtx<'_> {
     ) -> Line<'static> {
         let padding = pad_to(content_width, self.inner_width);
         let bg_default = self.apply_bg(Style::default());
-        let mut spans = Vec::with_capacity(content_spans.len() + 3);
+        let mut spans = Vec::with_capacity(content_spans.len() + 2);
         spans.push(Span::styled(self.marker_char, self.marker_style));
-        spans.push(Span::styled(" ", bg_default));
         spans.extend(content_spans);
         spans.push(Span::styled(padding, bg_default));
         Line::from(spans)
@@ -54,9 +55,8 @@ impl RowCtx<'_> {
     ) -> Line<'static> {
         let padding = self.inner_width.saturating_sub(left_width + right_width);
         let bg_default = self.apply_bg(Style::default());
-        let mut spans = Vec::with_capacity(left_spans.len() + right_spans.len() + 3);
+        let mut spans = Vec::with_capacity(left_spans.len() + right_spans.len() + 2);
         spans.push(Span::styled(self.marker_char, self.marker_style));
-        spans.push(Span::styled(" ", bg_default));
         spans.extend(left_spans);
         spans.push(Span::styled(" ".repeat(padding), bg_default));
         spans.extend(right_spans);

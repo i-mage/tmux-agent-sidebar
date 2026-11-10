@@ -34,6 +34,57 @@ pub(in crate::cli::hook) fn on_user_prompt_submit(
     0
 }
 
+/// A subagent whose transcript was written this recently is still running.
+/// Long enough to cover a test suite or a build it is waiting on, short
+/// enough that an entry left by a missed SubagentStop clears on a later Stop.
+const SUBAGENT_LIVE_SECS: u64 = 600;
+
+fn claude_projects_dir() -> Option<std::path::PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    Some(std::path::Path::new(&home).join(".claude").join("projects"))
+}
+
+/// The entries of a `@pane_subagents` list (`type:id,type:id`) whose
+/// transcript `<projects>/<project>/<session>/subagents/agent-<id>.jsonl`
+/// was modified within [`SUBAGENT_LIVE_SECS`] of `now`. Without a session id
+/// nothing can be checked, so nothing is kept.
+fn live_subagents(
+    current: &str,
+    session_id: Option<&str>,
+    projects: &std::path::Path,
+    now: std::time::SystemTime,
+) -> String {
+    let Some(session) = session_id.filter(|s| !s.is_empty()) else {
+        return String::new();
+    };
+    let dirs: Vec<std::path::PathBuf> = std::fs::read_dir(projects)
+        .map(|rd| {
+            rd.filter_map(Result::ok)
+                .map(|e| e.path().join(session).join("subagents"))
+                .filter(|p| p.is_dir())
+                .collect()
+        })
+        .unwrap_or_default();
+    let is_live = |id: &str| {
+        dirs.iter().any(|dir| {
+            std::fs::metadata(dir.join(format!("agent-{id}.jsonl")))
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|written| now.duration_since(written).ok())
+                .is_some_and(|age| age.as_secs() <= SUBAGENT_LIVE_SECS)
+        })
+    };
+    current
+        .split(',')
+        .filter(|entry| {
+            entry
+                .rsplit_once(':')
+                .is_some_and(|(_, id)| !id.is_empty() && is_live(id))
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 pub(in crate::cli::hook) fn on_stop(
     pane: &str,
     ctx: &AgentContext<'_>,
@@ -49,12 +100,31 @@ pub(in crate::cli::hook) fn on_stop(
         tmux::set_pane_option(pane, tmux::PANE_PROMPT_SOURCE, "response");
     }
     let bg_shell_live = !tmux::get_pane_option_value(pane, tmux::PANE_BG_CMD).is_empty();
-    // `Stop` is emitted for the parent turn, and Claude Code `Task` subagents
-    // are synchronous: once the parent reaches Stop, no child should still be
-    // running. Treat any leftover list as stale state from a missed or
-    // mismatched SubagentStop and clear it before `mark_task_reset`, whose
+    // `Stop` is emitted for the parent turn. A synchronous `Task` subagent
+    // is over by then, so a leftover entry is stale state from a missed or
+    // mismatched SubagentStop. Fork-local (10. 11. 2026): a BACKGROUND
+    // subagent is not over. It keeps running after the parent's Stop, and
+    // clearing the whole list made the sidebar show a chat with a running
+    // subagent as having none. An entry stays while its transcript is still
+    // being written; the rest is dropped before `mark_task_reset`, whose
     // guard intentionally skips writes while subagents are active.
-    tmux::unset_pane_option(pane, tmux::PANE_SUBAGENTS);
+    let current = tmux::get_pane_option_value(pane, tmux::PANE_SUBAGENTS);
+    if !current.is_empty() {
+        let kept = match claude_projects_dir() {
+            Some(root) => live_subagents(
+                &current,
+                ctx.session_id.as_deref(),
+                &root,
+                std::time::SystemTime::now(),
+            ),
+            None => String::new(),
+        };
+        if kept.is_empty() {
+            tmux::unset_pane_option(pane, tmux::PANE_SUBAGENTS);
+        } else if kept != current {
+            tmux::set_pane_option(pane, tmux::PANE_SUBAGENTS, &kept);
+        }
+    }
     if bg_shell_live {
         tmux::unset_pane_option(pane, tmux::PANE_WAIT_REASON);
     } else {
@@ -288,6 +358,72 @@ mod tests {
             Some("idle")
         );
         assert!(!tmux::test_mock::contains(pane, tmux::PANE_STARTED_AT));
+    }
+
+    // Fork-local (10. 11. 2026): a background subagent outlives the parent's
+    // Stop. It stays in the list while its transcript is still being written.
+
+    fn subagent_transcript(root: &std::path::Path, session: &str, id: &str) -> std::path::PathBuf {
+        let dir = root.join("-Users-x-proj").join(session).join("subagents");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join(format!("agent-{id}.jsonl"));
+        std::fs::write(&file, "{}\n").unwrap();
+        file
+    }
+
+    #[test]
+    fn live_subagents_keeps_the_one_still_writing_and_drops_the_silent_one() {
+        let root = tempfile::tempdir().unwrap();
+        let live = subagent_transcript(root.path(), "sess-1", "aa6e1");
+        let stale = subagent_transcript(root.path(), "sess-1", "a0551");
+        let now = std::time::SystemTime::now();
+        let old = now - std::time::Duration::from_secs(SUBAGENT_LIVE_SECS + 60);
+        std::fs::File::options()
+            .write(true)
+            .open(&stale)
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        assert!(live.exists());
+
+        let kept = live_subagents(
+            "general-purpose:aa6e1,general-purpose:a0551,Explore:nofile",
+            Some("sess-1"),
+            root.path(),
+            now,
+        );
+
+        assert_eq!(kept, "general-purpose:aa6e1");
+    }
+
+    #[test]
+    fn live_subagents_of_another_session_do_not_count() {
+        let root = tempfile::tempdir().unwrap();
+        subagent_transcript(root.path(), "other-session", "aa6e1");
+
+        let kept = live_subagents(
+            "general-purpose:aa6e1",
+            Some("sess-1"),
+            root.path(),
+            std::time::SystemTime::now(),
+        );
+
+        assert_eq!(kept, "");
+    }
+
+    #[test]
+    fn live_subagents_without_a_session_id_keeps_nothing() {
+        let root = tempfile::tempdir().unwrap();
+        subagent_transcript(root.path(), "sess-1", "aa6e1");
+
+        let kept = live_subagents(
+            "general-purpose:aa6e1",
+            None,
+            root.path(),
+            std::time::SystemTime::now(),
+        );
+
+        assert_eq!(kept, "");
     }
 
     #[test]

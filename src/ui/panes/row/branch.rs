@@ -66,9 +66,9 @@ pub fn sidebar_remove_marker_col(
     if !should_emit_remove_marker(git_info, sidebar_spawned, show_branch) {
         return None;
     }
-    // Row total width = marker(1) + space(1) + inner_width, so the
-    // last column (0-indexed) is `inner_width + 1`.
-    Some((inner_width + 1) as u16)
+    // Row total width = marker(1) + inner_width, so the last column
+    // (0-indexed) is `inner_width`.
+    Some(inner_width as u16)
 }
 
 pub(super) fn branch_ports_row(

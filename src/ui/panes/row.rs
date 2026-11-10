@@ -9,7 +9,7 @@ mod branch;
 mod ctx;
 mod status;
 
-use body::{idle_hint_row, prompt_rows, subagent_rows, task_progress_row, wait_reason_row};
+use body::{idle_hint_row, prompt_rows, task_progress_row, wait_reason_row};
 use branch::branch_ports_row;
 use ctx::{RowCtx, SELECTION_MARKER};
 #[cfg(test)]
@@ -54,7 +54,7 @@ pub(super) fn render_pane_lines_with_ports(
         } else {
             apply_bg(Style::default())
         },
-        inner_width: width.saturating_sub(2),
+        inner_width: width.saturating_sub(1),
         theme,
         bg,
         active,
@@ -65,7 +65,7 @@ pub(super) fn render_pane_lines_with_ports(
             Some(c) => Style::default().fg(theme.accent).bg(c),
             None => Style::default(),
         },
-        inner_width: width.saturating_sub(2),
+        inner_width: width.saturating_sub(1),
         theme,
         bg: active_bg,
         active,
@@ -86,7 +86,6 @@ pub(super) fn render_pane_lines_with_ports(
     if let Some(line) = task_progress_row(task_progress, ctx) {
         out.push(line);
     }
-    out.extend(subagent_rows(&pane.subagents, ctx));
     if let Some(line) = wait_reason_row(&pane.wait_reason, &pane.status, ctx) {
         out.push(line);
     }
@@ -463,13 +462,10 @@ mod tests {
         assert!(!line_text(&lines[1]).contains("Waiting for prompt"));
     }
 
-    #[test]
-    fn render_pane_lines_shows_single_subagent() {
+    fn lines_for(p: &PaneInfo) -> Vec<String> {
         let theme = ColorTheme::default();
-        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "test");
-        p.subagents = vec!["Explore".into()];
-        let lines = render_pane_lines_with_ports(
-            &p,
+        render_pane_lines_with_ports(
+            p,
             &PaneGitInfo::default(),
             None,
             None,
@@ -481,69 +477,59 @@ mod tests {
             0,
             0,
             true,
-        );
-
-        assert!(lines.len() >= 3);
-        let sub_line = line_text(&lines[1]);
-        assert!(sub_line.contains("└ "));
-        assert!(sub_line.contains("Explore #1"));
+        )
+        .iter()
+        .map(line_text)
+        .collect()
     }
 
+    // Fork-local (owner, 10. 11. 2026): the names of subagents are noise. A
+    // chat shows how many are running, as a number under its ordinal, in
+    // front of its text. The response arrow that used to sit there is gone.
+
     #[test]
-    fn render_pane_lines_shows_multiple_subagents_tree() {
-        let theme = ColorTheme::default();
+    fn render_pane_lines_shows_the_subagent_count_before_the_text() {
         let mut p = pane(PermissionMode::Default, PaneStatus::Running, "test");
         p.subagents = vec!["Explore #1".into(), "Plan".into(), "Explore #2".into()];
-        let lines = render_pane_lines_with_ports(
-            &p,
-            &PaneGitInfo::default(),
-            None,
-            None,
-            false,
-            false,
-            40,
-            &StatusIcons::default(),
-            &theme,
-            0,
-            0,
-            true,
-        );
+        let lines = lines_for(&p);
 
-        assert!(lines.len() >= 5);
-        assert!(line_text(&lines[1]).contains("├ "));
-        assert!(line_text(&lines[1]).contains("Explore #1"));
-        assert!(line_text(&lines[2]).contains("├ "));
-        assert!(line_text(&lines[2]).contains("Plan #2"));
-        assert!(line_text(&lines[3]).contains("└ "));
-        assert!(line_text(&lines[3]).contains("Explore #2"));
+        assert!(lines[1].starts_with(" 3 test"), "got: {:?}", lines[1]);
+        assert!(
+            !lines
+                .iter()
+                .any(|l| l.contains("Explore") || l.contains("Plan")),
+            "subagent names are not listed: {lines:?}"
+        );
+        assert!(!lines.iter().any(|l| l.contains('├') || l.contains('└')));
     }
 
     #[test]
-    fn render_pane_lines_subagents_before_wait_reason() {
-        let theme = ColorTheme::default();
-        let mut p = pane(PermissionMode::Default, PaneStatus::Waiting, "");
-        p.subagents = vec!["Explore".into()];
-        p.wait_reason = "permission_prompt".into();
-        let lines = render_pane_lines_with_ports(
-            &p,
-            &PaneGitInfo::default(),
-            None,
-            None,
-            false,
-            false,
-            40,
-            &StatusIcons::default(),
-            &theme,
-            0,
-            0,
-            true,
-        );
+    fn render_pane_lines_counts_subagents_on_a_response_too() {
+        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "hotovo");
+        p.prompt_is_response = true;
+        p.subagents = vec!["general-purpose".into()];
+        let lines = lines_for(&p);
 
-        assert!(lines.len() >= 3);
-        let sub_line = line_text(&lines[1]);
-        assert!(sub_line.contains("Explore #1"));
-        let reason_line = line_text(&lines[2]);
-        assert!(reason_line.contains("permission required"));
+        assert!(lines[1].starts_with(" 1 hotovo"), "got: {:?}", lines[1]);
+    }
+
+    #[test]
+    fn render_pane_lines_without_subagents_has_no_marker_before_the_text() {
+        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "hotovo");
+        p.prompt_is_response = true;
+        let lines = lines_for(&p);
+
+        assert!(lines[1].starts_with("   hotovo"), "got: {:?}", lines[1]);
+        assert!(!lines.iter().any(|l| l.contains('▷')));
+    }
+
+    #[test]
+    fn render_pane_lines_ten_or_more_subagents_stay_two_columns_wide() {
+        let mut p = pane(PermissionMode::Default, PaneStatus::Running, "test");
+        p.subagents = (0..12).map(|i| format!("a{i}")).collect();
+        let lines = lines_for(&p);
+
+        assert!(lines[1].starts_with(" 9+test"), "got: {:?}", lines[1]);
     }
 
     #[test]
@@ -572,8 +558,47 @@ mod tests {
 
         assert!(lines.len() >= 2);
         let response_line = line_text(&lines[1]);
-        assert!(response_line.contains("▷"));
+        assert!(!response_line.contains("▷"));
         assert!(response_line.contains("Task completed successfully"));
+    }
+
+    /// Fork-local: a Playground reply opens with its team member's face on a
+    /// line of its own (rules-owner), and the row above already shows that face
+    /// (`@team_face`). The response line leaves it out, so the face is there once.
+    #[test]
+    fn render_pane_lines_response_drops_the_leading_team_face() {
+        let theme = ColorTheme::default();
+        for face in ["👩🏻", "👱🏻‍♂️", "👩🏼‍🦰"] {
+            let p = pane_with_response(
+                PermissionMode::Default,
+                PaneStatus::Idle,
+                &format!("{face} Pre Alicu som spravila draft"),
+                true,
+            );
+            let lines = render_pane_lines_with_ports(
+                &p,
+                &PaneGitInfo::default(),
+                None,
+                None,
+                false,
+                false,
+                40,
+                &StatusIcons::default(),
+                &theme,
+                0,
+                0,
+                true,
+            );
+            let response_line = line_text(&lines[1]);
+            assert!(
+                response_line.contains("  Pre Alicu"),
+                "got: {response_line}"
+            );
+            assert!(
+                !response_line.contains(face),
+                "face left in: {response_line}"
+            );
+        }
     }
 
     /// Fork-local: a running row shows the agent's text, never the tool it
@@ -650,7 +675,7 @@ mod tests {
 
         assert!(lines.len() >= 2);
         let first = line_text(&lines[1]);
-        assert!(first.contains("▷"));
+        assert!(!first.contains("▷"));
         // char-wrap must not trim inter-word spaces like word-wrap does
         let second = line_text(&lines[2]);
         assert!(!second.starts_with("│  ghijk"));
@@ -786,11 +811,11 @@ mod tests {
             "+ worktree marker must be preserved: {text}"
         );
         // The trailing `×` must sit at the very last row column
-        // (= inner_width + 1), mirroring the repo header's
+        // (= inner_width, the marker being column 0), mirroring the repo header's
         // right-aligned `+` spawn button.
         assert_eq!(
             rendered_x_col(&text),
-            inner_width + 1,
+            inner_width,
             "× should pin to the rightmost column"
         );
         // The `×` suffix must come AFTER the branch text, not before.
@@ -853,7 +878,7 @@ mod tests {
         );
         assert_eq!(
             rendered_x_col(&text),
-            inner_width + 1,
+            inner_width,
             "× stays pinned to right edge under truncation"
         );
         // Total row width = marker(1) + space(1) + inner_width.
@@ -911,7 +936,7 @@ mod tests {
         let col_short = sidebar_remove_marker_col(&short, None, true, 40, true);
         let col_long = sidebar_remove_marker_col(&long, None, true, 40, true);
         assert_eq!(col_short, col_long);
-        assert_eq!(col_short, Some(41));
+        assert_eq!(col_short, Some(40));
     }
 
     #[test]
@@ -958,7 +983,7 @@ mod tests {
         let text = line_text(&line);
         assert_eq!(
             rendered_x_col(&text),
-            inner_width + 1,
+            inner_width,
             "× must pin to right edge regardless of port presence"
         );
         let port_idx = text.find(":3000").expect(":3000 should be present");
@@ -1133,9 +1158,9 @@ mod tests {
         );
         for line in &lines {
             let text = line_text(line);
-            // Each line starts with marker(1) + space(1) + indent(2) = "    " for non-selected.
+            // Each line starts with marker(1) + indent(2) = "   " for non-selected.
             assert!(
-                text.starts_with("    "),
+                text.starts_with("   ") && !text.starts_with("    "),
                 "each wrapped line should carry the left padding, got: {text}"
             );
         }

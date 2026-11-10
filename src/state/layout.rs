@@ -52,6 +52,10 @@ pub struct FrameLayout {
     /// X column of the repo filter button in the secondary header. `None`
     /// when the button is hidden. Used for click hit-testing.
     pub repo_button_col: Option<u16>,
+    /// Fork-local: first screen column right of the status counts on the
+    /// header row; from here on a click belongs to the notices button and
+    /// the repo selector, not to a status filter.
+    pub header_split_col: Option<u16>,
     /// Click regions for the `[+]` spawn button rendered at the right
     /// edge of each repo-group header. One entry per visible repo group.
     pub repo_spawn_targets: Vec<RepoSpawnTarget>,
@@ -159,8 +163,8 @@ impl AppState {
         }
     }
 
-    /// Handle mouse click on the secondary header row (row 1).
-    /// The repo filter button lives on the far right of this row.
+    /// Handle mouse click on the right part of the header row (row 0):
+    /// the notices button and, on the far right, the repo filter button.
     pub fn handle_secondary_header_click(&mut self, col: u16) {
         if self
             .notices
@@ -236,11 +240,15 @@ impl AppState {
         }
 
         if row == 0 {
-            self.handle_filter_click(col);
-            return;
-        }
-        if row == 1 {
-            self.handle_secondary_header_click(col);
+            if self
+                .layout
+                .header_split_col
+                .is_some_and(|split| col >= split)
+            {
+                self.handle_secondary_header_click(col);
+            } else {
+                self.handle_filter_click(col);
+            }
             return;
         }
 
@@ -269,7 +277,7 @@ impl AppState {
             return;
         }
 
-        let line_index = (row as usize - 2) + self.scrolls.panes.offset;
+        let line_index = (row as usize - 1) + self.scrolls.panes.offset;
         if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
             self.global.selected_pane_row = *agent_row;
             self.global.queue_cursor_save();

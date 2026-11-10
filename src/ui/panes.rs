@@ -63,17 +63,15 @@ impl PaneLayout {
             width: area.width,
             height: 1.min(area.height),
         };
-        let secondary_area = Rect {
+        // Fork-local (owner, 10. 11. 2026): the repo selector shares the
+        // filter row, so the agent list starts one row higher. The draw
+        // code narrows this rect to the columns right of the counts.
+        let secondary_area = filter_area;
+        let list_area = Rect {
             x: area.x,
             y: area.y + 1,
             width: area.width,
-            height: 1.min(area.height.saturating_sub(1)),
-        };
-        let list_area = Rect {
-            x: area.x,
-            y: area.y + 2,
-            width: area.width,
-            height: area.height.saturating_sub(2),
+            height: area.height.saturating_sub(1),
         };
         Self {
             filter_area,
@@ -357,9 +355,9 @@ pub(super) fn render_repo_popup(frame: &mut Frame, state: &mut AppState, area: R
     let popup_width = (max_name_len + 4).min(area.width as usize).max(10) as u16;
     let popup_height = (repos.len() as u16 + 2).min(area.height.saturating_sub(2)); // +2 for borders
 
-    // Right-aligned, below the 2-row header
+    // Right-aligned, below the one-row header
     let popup_x = area.x + area.width.saturating_sub(popup_width);
-    let popup_y = area.y + 2;
+    let popup_y = area.y + 1;
 
     let popup_rect = Rect::new(popup_x, popup_y, popup_width, popup_height);
     state.popup.set_repo_area(Some(popup_rect));
@@ -410,17 +408,37 @@ pub(super) fn render_repo_popup(frame: &mut Frame, state: &mut AppState, area: R
     }
 }
 
-fn render_filter_bar_into(frame: &mut Frame, state: &AppState, area: Rect) {
+/// Draws the status counts and returns how many columns they took.
+fn render_filter_bar_into(frame: &mut Frame, state: &AppState, area: Rect) -> u16 {
     let line = filter_bar::render_filter_bar(state);
+    let used = line.width().min(area.width as usize) as u16;
     frame.render_widget(Paragraph::new(vec![line]), area);
+    used
 }
 
-fn render_secondary_header_into(frame: &mut Frame, state: &mut AppState, area: Rect) {
+/// Draws the notices button and the repo selector on the filter row, in
+/// the columns right of the counts (`used`). The button columns are stored
+/// as screen columns, and `header_split_col` tells the click handler where
+/// the counts end.
+fn render_secondary_header_into(frame: &mut Frame, state: &mut AppState, area: Rect, used: u16) {
+    let free = Rect {
+        x: area.x + used,
+        y: area.y,
+        width: area.width.saturating_sub(used),
+        height: area.height,
+    };
+    if free.width == 0 || free.height == 0 {
+        state.notices.button_col = None;
+        state.layout.repo_button_col = None;
+        state.layout.header_split_col = None;
+        return;
+    }
     let (line, notices_btn_col, repo_btn_col) =
-        filter_bar::render_secondary_header(state, area.width);
-    state.notices.button_col = notices_btn_col;
-    state.layout.repo_button_col = repo_btn_col;
-    frame.render_widget(Paragraph::new(vec![line]), area);
+        filter_bar::render_secondary_header(state, free.width);
+    state.notices.button_col = notices_btn_col.map(|c| c + used);
+    state.layout.repo_button_col = repo_btn_col.map(|c| c + used);
+    state.layout.header_split_col = Some(used);
+    frame.render_widget(Paragraph::new(vec![line]), free);
 }
 
 fn compute_scroll_offset(state: &mut AppState, total_lines: usize, list_area: Rect) -> usize {
@@ -485,8 +503,8 @@ fn render_flash_banner_into(frame: &mut Frame, state: &mut AppState, area: Rect)
 
 pub fn draw_agents(frame: &mut Frame, state: &mut AppState, area: Rect) {
     let layout = PaneLayout::compute(area);
-    render_filter_bar_into(frame, state, layout.filter_area);
-    render_secondary_header_into(frame, state, layout.secondary_area);
+    let used = render_filter_bar_into(frame, state, layout.filter_area);
+    render_secondary_header_into(frame, state, layout.secondary_area, used);
 
     let row_collector::CollectedRows {
         lines,
@@ -526,16 +544,17 @@ mod tests {
         assert_eq!(layout.filter_area.y, 0);
         assert_eq!(layout.filter_area.width, 40);
         assert_eq!(layout.filter_area.height, 1);
-        assert_eq!(layout.secondary_area.y, 1);
+        // Fork-local: the repo selector shares the filter row, the list starts on row 1.
+        assert_eq!(layout.secondary_area.y, 0);
         assert_eq!(layout.secondary_area.height, 1);
-        assert_eq!(layout.list_area.y, 2);
-        assert_eq!(layout.list_area.height, 18);
+        assert_eq!(layout.list_area.y, 1);
+        assert_eq!(layout.list_area.height, 19);
         assert_eq!(layout.list_area.width, 40);
     }
 
     #[test]
     fn pane_layout_handles_tiny_area() {
-        // Only 1 row available — filter gets it, secondary and list collapse to 0.
+        // Only 1 row available: the header (counts and repo selector) gets it, the list collapses to 0.
         let area = Rect {
             x: 0,
             y: 0,
@@ -544,7 +563,7 @@ mod tests {
         };
         let layout = PaneLayout::compute(area);
         assert_eq!(layout.filter_area.height, 1);
-        assert_eq!(layout.secondary_area.height, 0);
+        assert_eq!(layout.secondary_area.height, 1);
         assert_eq!(layout.list_area.height, 0);
     }
 
@@ -574,9 +593,9 @@ mod tests {
         assert_eq!(layout.filter_area.x, 5);
         assert_eq!(layout.filter_area.y, 10);
         assert_eq!(layout.secondary_area.x, 5);
-        assert_eq!(layout.secondary_area.y, 11);
+        assert_eq!(layout.secondary_area.y, 10);
         assert_eq!(layout.list_area.x, 5);
-        assert_eq!(layout.list_area.y, 12);
-        assert_eq!(layout.list_area.height, 13);
+        assert_eq!(layout.list_area.y, 11);
+        assert_eq!(layout.list_area.height, 14);
     }
 }

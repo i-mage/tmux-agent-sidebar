@@ -61,6 +61,7 @@ pub(super) mod pane_line_field {
     // Fork-local, optional (read with `get`, not counted in MIN_FIELDS):
     pub const CAR_MODE: usize = 22; // absolute 28 (@voice_mode)
     pub const CAR_EMOJI: usize = 23; // absolute 29 (@voice_emoji)
+    pub const TEAM_FACE: usize = 24; // absolute 30 (@team_face)
     /// Minimum number of fields the pane-line suffix must contain.
     /// Equals `session_line_field::MIN_FIELDS - PANE_LINE_OFFSET`.
     pub const MIN_FIELDS: usize = 22;
@@ -101,6 +102,7 @@ fn pane_format() -> String {
         q(PANE_BG_CMD),
         q("@voice_mode"),
         q("@voice_emoji"),
+        q("@team_face"),
     ]
     .join("|")
 }
@@ -282,7 +284,10 @@ fn parse_pane_fields_with_processes(
     // is gone. Subsequent polls short-circuit at the `AgentType::from_label`
     // check above once `@pane_agent` has been cleared. Claude is excluded
     // because its SessionEnd hook drives cleanup instead.
-    if matches!(agent, AgentType::Codex | AgentType::OpenCode | AgentType::Pi) && is_shell_command(current_command)
+    if matches!(
+        agent,
+        AgentType::Codex | AgentType::OpenCode | AgentType::Pi
+    ) && is_shell_command(current_command)
     {
         let agent_still_alive = pane_pid
             .and_then(|pid| {
@@ -348,6 +353,7 @@ fn parse_pane_fields_with_processes(
         car_emoji: car_emoji(
             parts.get(pane_line_field::CAR_MODE).map(|s| s.as_str()),
             parts.get(pane_line_field::CAR_EMOJI).map(|s| s.as_str()),
+            parts.get(pane_line_field::TEAM_FACE).map(|s| s.as_str()),
         ),
         ordinal: 0,
         sidebar_spawned: parts[pane_line_field::SIDEBAR_SPAWNED] == "1",
@@ -362,10 +368,15 @@ fn parse_pane_fields_with_processes(
     })
 }
 
-/// Fork-local: the character shown before an agent's name while Playground
-/// voice mode is on (renamed from car mode 22. 10. 2026). Each voice has its
-/// own character; 👩🏻 when the pane carries no emoji.
-fn car_emoji(mode: Option<&str>, emoji: Option<&str>) -> String {
+/// Fork-local: the character shown before an agent's name. A Playground
+/// session sets `@team_face`, the face of its team member (PLA-1564, #757,
+/// 6. 11. 2026), and that face is shown always. A pane without it keeps the
+/// older rule: the voice's character while voice mode is on (renamed from car
+/// mode 22. 10. 2026), 👩🏻 when the pane carries no emoji, nothing otherwise.
+fn car_emoji(mode: Option<&str>, emoji: Option<&str>, face: Option<&str>) -> String {
+    if let Some(f) = face.filter(|f| !f.is_empty()) {
+        return f.to_string();
+    }
     if mode != Some("on") {
         return String::new();
     }
@@ -469,8 +480,12 @@ fn pane_output_needs_process_snapshot(all_panes_output: &str) -> bool {
             return false;
         }
         let pane_fields = &parts[session_line_field::PANE_LINE_OFFSET..];
-        AgentType::from_label(&pane_fields[pane_line_field::AGENT])
-            .is_some_and(|agent| matches!(agent, AgentType::Codex | AgentType::OpenCode | AgentType::Pi))
+        AgentType::from_label(&pane_fields[pane_line_field::AGENT]).is_some_and(|agent| {
+            matches!(
+                agent,
+                AgentType::Codex | AgentType::OpenCode | AgentType::Pi
+            )
+        })
     })
 }
 
@@ -1349,19 +1364,25 @@ mod car_emoji_tests {
 
     #[test]
     fn car_mode_off_shows_nothing() {
-        assert_eq!(car_emoji(None, None), "");
-        assert_eq!(car_emoji(Some(""), Some("👱🏻‍♂️")), "");
+        assert_eq!(car_emoji(None, None, None), "");
+        assert_eq!(car_emoji(Some(""), Some("👱🏻‍♂️"), Some("")), "");
     }
 
     #[test]
     fn car_mode_on_shows_the_voice_car() {
-        assert_eq!(car_emoji(Some("on"), Some("👱🏻‍♂️")), "👱🏻‍♂️");
-        assert_eq!(car_emoji(Some("on"), Some("👩🏻‍🦰")), "👩🏻‍🦰");
+        assert_eq!(car_emoji(Some("on"), Some("👱🏻‍♂️"), None), "👱🏻‍♂️");
+        assert_eq!(car_emoji(Some("on"), Some("👩🏼‍🦰"), None), "👩🏼‍🦰");
     }
 
     #[test]
     fn car_mode_on_without_emoji_falls_back() {
-        assert_eq!(car_emoji(Some("on"), Some("")), "👩🏻");
-        assert_eq!(car_emoji(Some("on"), None), "👩🏻");
+        assert_eq!(car_emoji(Some("on"), Some(""), None), "👩🏻");
+        assert_eq!(car_emoji(Some("on"), None, None), "👩🏻");
+    }
+
+    #[test]
+    fn team_face_is_shown_always_and_wins_over_the_voice() {
+        assert_eq!(car_emoji(None, None, Some("👩🏼‍🦰")), "👩🏼‍🦰");
+        assert_eq!(car_emoji(Some("on"), Some("👩🏻"), Some("👱🏻‍♂️")), "👱🏻‍♂️");
     }
 }

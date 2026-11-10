@@ -8,7 +8,10 @@
 fn tmux_tmpdir_for_tests_points_at_an_existing_private_dir() {
     let dir = std::env::var("TMUX_TMPDIR").expect("TMUX_TMPDIR set by .cargo/config.toml");
     let path = std::path::Path::new(&dir);
-    assert!(path.is_dir(), "TMUX_TMPDIR {dir} does not exist, tmux would use the live server");
+    assert!(
+        path.is_dir(),
+        "TMUX_TMPDIR {dir} does not exist, tmux would use the live server"
+    );
     assert!(path.is_absolute(), "TMUX_TMPDIR {dir} must be absolute");
     assert_eq!(std::env::var("TMUX").as_deref(), Ok(""));
 }

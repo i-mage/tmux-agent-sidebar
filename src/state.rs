@@ -1243,10 +1243,10 @@ mod tests {
         state.scrolls.panes.offset = 0;
 
         // row 0 = filter bar, row 1 = secondary header, row 2+ = agent list rows
-        state.handle_mouse_click(3, 5); // row 3 → line_index = (3-2) = 1 → agent row 0
+        state.handle_mouse_click(2, 5); // row 2 → line_index = (2-1) = 1 → agent row 0
         assert_eq!(state.global.selected_pane_row, 0);
 
-        state.handle_mouse_click(4, 5); // row 4 → line_index = (4-2) = 2 → agent row 1
+        state.handle_mouse_click(3, 5); // row 3 → line_index = (3-1) = 2 → agent row 1
         assert_eq!(state.global.selected_pane_row, 1);
     }
 
@@ -1289,13 +1289,21 @@ mod tests {
                 panes: vec![(test_pane("%2"), PaneGitInfo::default())],
             },
         ];
+        // Fork-local: the repo selector sits on the filter row (row 0),
+        // right of the status counts.
+        state.layout.header_split_col = Some(18);
         state.layout.repo_button_col = Some(20);
 
-        state.handle_mouse_click(1, 19);
+        state.handle_mouse_click(0, 19);
         assert!(!state.is_repo_popup_open());
 
-        state.handle_mouse_click(1, 20);
+        state.handle_mouse_click(0, 20);
         assert!(state.is_repo_popup_open());
+        assert_eq!(
+            state.global.status_filter,
+            StatusFilter::All,
+            "a click on the selector is not a click on a status count"
+        );
     }
 
     #[test]
@@ -1380,8 +1388,8 @@ mod tests {
         state.layout.line_to_row = vec![None, Some(0), Some(0), None, Some(1)];
         state.scrolls.panes.offset = 2;
 
-        // row 4 → line_index = (4-2) + 2 = 4 → agent row 1
-        state.handle_mouse_click(4, 5);
+        // row 3 → line_index = (3-1) + 2 = 4 → agent row 1
+        state.handle_mouse_click(3, 5);
         assert_eq!(state.global.selected_pane_row, 1);
     }
 

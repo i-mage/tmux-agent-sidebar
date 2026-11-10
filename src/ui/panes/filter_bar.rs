@@ -78,10 +78,18 @@ pub(super) fn render_secondary_header<'a>(
         Style::default().fg(theme.text_muted)
     };
 
+    // Fork-local (owner, 10. 11. 2026): this header is drawn on the filter
+    // row, in the columns the status counts leave free, so it reserves the
+    // notices slot only when there is a notice and gives the repo name
+    // whatever is left.
     let has_notices_info = crate::ui::notices::has_info(state);
     let notices_button_col = has_notices_info.then_some(0);
-    let notices_width = crate::ui::notices::BUTTON_WIDTH;
-    let max_repo_label_width = width.saturating_sub((notices_width + 3) as u16) as usize;
+    let notices_width = if has_notices_info {
+        crate::ui::notices::BUTTON_WIDTH
+    } else {
+        0
+    };
+    let max_repo_label_width = (width as usize).saturating_sub(notices_width + 2);
     let repo_label = match &state.global.repo_filter {
         RepoFilter::All => "—".to_string(),
         RepoFilter::Repo(name) => truncate_to_width(name, max_repo_label_width),
@@ -95,8 +103,6 @@ pub(super) fn render_secondary_header<'a>(
     if has_notices_info {
         spans.push(crate::ui::notices::button_span(state));
         spans.push(Span::raw(" "));
-    } else {
-        spans.push(Span::raw("  "));
     }
     spans.push(Span::raw(" ".repeat(gap)));
     spans.push(Span::styled(repo_label, repo_style));

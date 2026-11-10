@@ -137,7 +137,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
                     git_info,
                     ports,
                     true,
-                    width.saturating_sub(2),
+                    width.saturating_sub(1),
                     state.show_branch,
                 )
             {

@@ -28,8 +28,9 @@ pub struct PaneInfo {
     /// tmux option (set by the agent-picker rename). Wins over the
     /// scanned Claude `/rename` session name.
     pub custom_name: String,
-    /// Fork-local: character emoji of an agent in Playground voice mode (from
-    /// the `@voice_mode` + `@voice_emoji` pane options). Empty when it is off.
+    /// Fork-local: the face before an agent's name: its Playground team member
+    /// (`@team_face`), else its voice character while voice mode is on (from
+    /// the `@voice_mode` + `@voice_emoji` pane options). Empty otherwise.
     pub car_emoji: String,
     /// Fork-local: 1-based global position in the rendered sidebar
     /// (groups sorted, traversal order inside). 0 = unassigned. Matches

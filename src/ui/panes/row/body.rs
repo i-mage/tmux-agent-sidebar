@@ -5,9 +5,7 @@ use ratatui::{
 
 use super::ctx::RowCtx;
 use crate::tmux::PaneStatus;
-use crate::ui::text::{
-    display_width, truncate_to_width, wait_reason_label, wrap_text, wrap_text_char,
-};
+use crate::ui::text::{display_width, wait_reason_label, wrap_text, wrap_text_char};
 
 pub(super) fn task_progress_row(
     task_progress: Option<&crate::activity::TaskProgress>,
@@ -45,41 +43,6 @@ pub(super) fn task_progress_row(
     ))
 }
 
-pub(super) fn subagent_rows(subagents: &[String], ctx: &RowCtx) -> Vec<Line<'static>> {
-    if subagents.is_empty() {
-        return Vec::new();
-    }
-    let theme = ctx.theme;
-    let subagent_color = theme.subagent;
-    let tree_color = theme.text_muted;
-    let last_idx = subagents.len() - 1;
-    let mut out = Vec::with_capacity(subagents.len());
-    for (i, sa) in subagents.iter().enumerate() {
-        let connector = if i == last_idx { "└ " } else { "├ " };
-        let numbered = if sa.contains('#') {
-            sa.clone()
-        } else {
-            format!("{} #{}", sa, i + 1)
-        };
-        let prefix = format!("  {}", connector);
-        let prefix_dw = display_width(&prefix);
-        let max_sa_w = ctx.inner_width.saturating_sub(prefix_dw);
-        let truncated_sa = truncate_to_width(&numbered, max_sa_w);
-        let text_dw = prefix_dw + display_width(&truncated_sa);
-        out.push(ctx.row_line(
-            vec![
-                Span::styled(prefix, ctx.apply_bg(Style::default().fg(tree_color))),
-                Span::styled(
-                    truncated_sa,
-                    ctx.apply_bg(Style::default().fg(subagent_color)),
-                ),
-            ],
-            text_dw,
-        ));
-    }
-    out
-}
-
 pub(super) fn wait_reason_row(
     wait_reason: &str,
     status: &PaneStatus,
@@ -111,9 +74,27 @@ pub(super) fn wait_reason_row(
     ))
 }
 
+/// Fork-local: the faces of the Playground team members. A reply opens with its
+/// member's face on a line of its own (rules-owner, 6. 11. 2026); the agent row
+/// shows the same face from `@team_face`, so the response line leaves it out.
+const TEAM_FACES: [&str; 3] = ["👩🏻", "👱🏻\u{200d}♂\u{fe0f}", "👩🏼\u{200d}🦰"];
+
+fn without_team_face(text: &str) -> &str {
+    let mut rest = text.trim_start();
+    while let Some(face) = TEAM_FACES.iter().find(|f| rest.starts_with(**f)) {
+        rest = rest[face.len()..].trim_start();
+    }
+    rest
+}
+
 pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Line<'static>> {
     let theme = ctx.theme;
     let is_response = pane.prompt_is_response;
+    let text = if is_response {
+        without_team_face(&pane.prompt)
+    } else {
+        pane.prompt.as_str()
+    };
     let prompt_color = if ctx.active {
         theme.text_active
     } else {
@@ -121,23 +102,32 @@ pub(super) fn prompt_rows(pane: &crate::tmux::PaneInfo, ctx: &RowCtx) -> Vec<Lin
     };
     let wrap_width = ctx.inner_width.saturating_sub(2);
     let wrapped = if is_response {
-        wrap_text_char(&pane.prompt, wrap_width, 3)
+        wrap_text_char(text, wrap_width, 3)
     } else {
-        wrap_text(&pane.prompt, wrap_width, 3)
+        wrap_text(text, wrap_width, 3)
     };
 
+    // Fork-local (owner, 10. 11. 2026): the two columns in front of the
+    // first line, under the agent's ordinal, carry the number of running
+    // subagents. Their names were noise and are not listed any more, and
+    // the response arrow that used to sit here said nothing the owner read.
+    let subagents = pane.subagents.len();
     let mut out = Vec::with_capacity(wrapped.len());
     for (li, wl) in wrapped.iter().enumerate() {
-        if is_response && li == 0 {
-            let arrow_color = theme.response_arrow;
-            let text_dw = 2 + display_width(wl); // "▷ " width
+        if li == 0 && subagents > 0 {
+            let count = if subagents > 9 {
+                "9+".to_string()
+            } else {
+                format!("{subagents} ")
+            };
+            let text_dw = 2 + display_width(wl);
             out.push(ctx.row_line(
                 vec![
                     Span::styled(
-                        "▷ ",
+                        count,
                         ctx.apply_bg(
                             Style::default()
-                                .fg(arrow_color)
+                                .fg(theme.subagent)
                                 .add_modifier(Modifier::BOLD),
                         ),
                     ),

@@ -157,7 +157,9 @@ fn log_filter_change(from: StatusFilter, to: StatusFilter, source: &str) {
     if from == to {
         return;
     }
-    let Some(home) = std::env::var_os("HOME") else { return };
+    let Some(home) = std::env::var_os("HOME") else {
+        return;
+    };
     let path = std::path::Path::new(&home).join(".cache/tmux-agent-sidebar-filter.log");
     let _ = std::fs::create_dir_all(path.parent().unwrap_or(std::path::Path::new(".")));
     let secs = std::time::SystemTime::now()
@@ -169,7 +171,16 @@ fn log_filter_change(from: StatusFilter, to: StatusFilter, source: &str) {
     if pane.is_empty() {
         return;
     }
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
-        let _ = writeln!(f, "{secs} {pane} {} -> {} via {source}", from.as_str(), to.as_str());
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = writeln!(
+            f,
+            "{secs} {pane} {} -> {} via {source}",
+            from.as_str(),
+            to.as_str()
+        );
     }
 }
