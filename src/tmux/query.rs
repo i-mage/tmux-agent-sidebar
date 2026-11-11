@@ -11,8 +11,8 @@ use super::options::{
     PANE_WORKTREE_BRANCH, PANE_WORKTREE_NAME, unset_pane_option,
 };
 use super::types::{
-    AgentType, CODEX_AGENT, PaneInfo, PaneStatus, PermissionMode, SessionInfo, WindowInfo,
-    WorktreeMetadata,
+    AgentType, AgentWindow, CODEX_AGENT, PaneInfo, PaneStatus, PermissionMode, SessionInfo,
+    WindowInfo, WorktreeMetadata,
 };
 use crate::worktree::SPAWNED_OPTION;
 
@@ -62,6 +62,7 @@ pub(super) mod pane_line_field {
     pub const CAR_MODE: usize = 22; // absolute 28 (@voice_mode)
     pub const CAR_EMOJI: usize = 23; // absolute 29 (@voice_emoji)
     pub const TEAM_FACE: usize = 24; // absolute 30 (@team_face)
+    pub const AGENT_WINDOW: usize = 25; // absolute 31 (@agent_window, window option)
     /// Minimum number of fields the pane-line suffix must contain.
     /// Equals `session_line_field::MIN_FIELDS - PANE_LINE_OFFSET`.
     pub const MIN_FIELDS: usize = 22;
@@ -103,6 +104,7 @@ fn pane_format() -> String {
         q("@voice_mode"),
         q("@voice_emoji"),
         q("@team_face"),
+        q("@agent_window"),
     ]
     .join("|")
 }
@@ -354,6 +356,12 @@ fn parse_pane_fields_with_processes(
             parts.get(pane_line_field::CAR_MODE).map(|s| s.as_str()),
             parts.get(pane_line_field::CAR_EMOJI).map(|s| s.as_str()),
             parts.get(pane_line_field::TEAM_FACE).map(|s| s.as_str()),
+        ),
+        agent_window: AgentWindow::from_label(
+            parts
+                .get(pane_line_field::AGENT_WINDOW)
+                .map(|s| s.as_str())
+                .unwrap_or(""),
         ),
         ordinal: 0,
         sidebar_spawned: parts[pane_line_field::SIDEBAR_SPAWNED] == "1",
@@ -643,6 +651,7 @@ mod tests {
             session_name: String::new(),
             custom_name: String::new(),
             car_emoji: String::new(),
+            agent_window: crate::tmux::AgentWindow::None,
             ordinal: 0,
             sidebar_spawned: false,
             bg_shell_cmd: None,
@@ -1232,6 +1241,7 @@ mod tests {
                     session_name: String::new(),
                     custom_name: String::new(),
                     car_emoji: String::new(),
+                    agent_window: crate::tmux::AgentWindow::None,
                     ordinal: 0,
                     sidebar_spawned: false,
                     bg_shell_cmd: None,

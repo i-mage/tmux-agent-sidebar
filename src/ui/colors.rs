@@ -1,6 +1,6 @@
 use ratatui::style::Color;
 
-use crate::tmux::{self, AgentType, PaneStatus};
+use crate::tmux::{self, AgentType, AgentWindow, PaneStatus};
 
 /// Runtime color theme, loaded from tmux @sidebar_color_* variables on startup.
 /// Overrides may be xterm-256 indexes or six-digit RGB hex values.
@@ -35,6 +35,14 @@ pub struct ColorTheme {
     /// Fork-local: background behind every row of the pane focused in tmux,
     /// so the active agent reads as one block rather than a thin marker.
     pub active_bg: Color,
+    /// Fork-local: rows of a pane in a WhatsApp agent window (`WA-*`), the
+    /// same green as that window's background; `_active` when it is focused,
+    /// the green of its status-line tab.
+    pub wa_bg: Color,
+    pub wa_active_bg: Color,
+    /// Fork-local: the same pair in purple for Agenda and sweep windows.
+    pub agent_window_bg: Color,
+    pub agent_window_active_bg: Color,
     pub branch: Color,
     pub badge_danger: Color,
     pub badge_auto: Color,
@@ -76,6 +84,10 @@ impl Default for ColorTheme {
             wait_reason: Color::Indexed(221),
             selection_bg: Color::Indexed(239),
             active_bg: Color::Indexed(236),
+            wa_bg: Color::Rgb(0x08, 0x24, 0x0f),
+            wa_active_bg: Color::Rgb(0x17, 0x60, 0x2f),
+            agent_window_bg: Color::Rgb(0x1d, 0x0b, 0x2a),
+            agent_window_active_bg: Color::Rgb(0x5b, 0x21, 0x70),
             branch: Color::Indexed(109),
             badge_danger: Color::Indexed(167),
             badge_auto: Color::Indexed(221),
@@ -133,6 +145,13 @@ impl ColorTheme {
         theme.wait_reason = read(tmux::SIDEBAR_COLOR_WAIT_REASON, theme.wait_reason);
         theme.selection_bg = read(tmux::SIDEBAR_COLOR_SELECTION, theme.selection_bg);
         theme.active_bg = read(tmux::SIDEBAR_COLOR_ACTIVE_BG, theme.active_bg);
+        theme.wa_bg = read(tmux::SIDEBAR_COLOR_WA_BG, theme.wa_bg);
+        theme.wa_active_bg = read(tmux::SIDEBAR_COLOR_WA_ACTIVE_BG, theme.wa_active_bg);
+        theme.agent_window_bg = read(tmux::SIDEBAR_COLOR_AGENT_WINDOW_BG, theme.agent_window_bg);
+        theme.agent_window_active_bg = read(
+            tmux::SIDEBAR_COLOR_AGENT_WINDOW_ACTIVE_BG,
+            theme.agent_window_active_bg,
+        );
         theme.branch = read(tmux::SIDEBAR_COLOR_BRANCH, theme.branch);
         theme.task_progress = read(tmux::SIDEBAR_COLOR_TASK_PROGRESS, theme.task_progress);
         theme.subagent = read(tmux::SIDEBAR_COLOR_SUBAGENT, theme.subagent);
@@ -162,6 +181,21 @@ impl ColorTheme {
             PaneStatus::Idle => self.status_idle,
             PaneStatus::Error => self.status_error,
             PaneStatus::Unknown => self.status_unknown,
+        }
+    }
+
+    /// Fork-local: background of a pane's whole block in the sidebar.
+    /// A pane in an autonomous agent window keeps its window's colour, a
+    /// brighter shade while focused; any other pane is only painted while
+    /// focused (`active_bg`).
+    pub fn pane_block_bg(&self, window: AgentWindow, active: bool) -> Option<Color> {
+        match (window, active) {
+            (AgentWindow::WhatsApp, false) => Some(self.wa_bg),
+            (AgentWindow::WhatsApp, true) => Some(self.wa_active_bg),
+            (AgentWindow::Agent, false) => Some(self.agent_window_bg),
+            (AgentWindow::Agent, true) => Some(self.agent_window_active_bg),
+            (AgentWindow::None, true) => Some(self.active_bg),
+            (AgentWindow::None, false) => None,
         }
     }
 

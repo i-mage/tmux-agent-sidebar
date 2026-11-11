@@ -251,6 +251,7 @@ mod tests {
             session_name: String::new(),
             custom_name: String::new(),
             car_emoji: String::new(),
+            agent_window: crate::tmux::AgentWindow::None,
             ordinal: 0,
             sidebar_spawned: false,
             bg_shell_cmd: None,

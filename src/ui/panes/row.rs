@@ -37,7 +37,10 @@ pub(super) fn render_pane_lines_with_ports(
     // block, `active_bg` behind every row plus the `┃` marker down its
     // whole height. The sidebar cursor (`selected`) keeps its own
     // selection background on the status and branch rows.
-    let active_bg = if active { Some(theme.active_bg) } else { None };
+    // Fork-local (11. 11. 2026): a pane in a WhatsApp or Agenda window is
+    // painted in that window's green or purple, always, brighter while
+    // focused, so the sidebar tells it apart like the status-line tab does.
+    let active_bg = theme.pane_block_bg(pane.agent_window, active);
     let bg = if selected {
         Some(theme.selection_bg)
     } else {
@@ -140,6 +143,7 @@ mod tests {
             session_name: String::new(),
             custom_name: String::new(),
             car_emoji: String::new(),
+            agent_window: crate::tmux::AgentWindow::None,
             ordinal: 0,
             sidebar_spawned: false,
             bg_shell_cmd: None,
@@ -565,6 +569,61 @@ mod tests {
     /// Fork-local: a Playground reply opens with its team member's face on a
     /// line of its own (rules-owner), and the row above already shows that face
     /// (`@team_face`). The response line leaves it out, so the face is there once.
+    #[test]
+    fn render_pane_lines_paints_agent_window_rows_in_their_colour() {
+        use crate::tmux::AgentWindow;
+        let theme = ColorTheme::default();
+        let cases = [
+            (AgentWindow::WhatsApp, false, Some(theme.wa_bg)),
+            (AgentWindow::WhatsApp, true, Some(theme.wa_active_bg)),
+            (AgentWindow::Agent, false, Some(theme.agent_window_bg)),
+            (AgentWindow::Agent, true, Some(theme.agent_window_active_bg)),
+            (AgentWindow::None, false, None),
+            (AgentWindow::None, true, Some(theme.active_bg)),
+        ];
+        for (window, active, want) in cases {
+            let mut p = pane(
+                PermissionMode::Default,
+                PaneStatus::Idle,
+                "odpoveď klientovi",
+            );
+            p.agent_window = window;
+            let lines = render_pane_lines_with_ports(
+                &p,
+                &PaneGitInfo::default(),
+                None,
+                None,
+                false,
+                active,
+                40,
+                &StatusIcons::default(),
+                &theme,
+                0,
+                0,
+                true,
+            );
+            assert!(lines.len() >= 2, "{window:?}: {} lines", lines.len());
+            for (i, line) in lines.iter().enumerate() {
+                for span in &line.spans {
+                    assert_eq!(
+                        span.style.bg, want,
+                        "{window:?} active={active} line {i} span {:?}",
+                        span.content
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn agent_window_label_parses_the_style_script_values() {
+        use crate::tmux::AgentWindow;
+        assert_eq!(AgentWindow::from_label("wa"), AgentWindow::WhatsApp);
+        assert_eq!(AgentWindow::from_label("agent"), AgentWindow::Agent);
+        assert_eq!(AgentWindow::from_label("1"), AgentWindow::Agent);
+        assert_eq!(AgentWindow::from_label(""), AgentWindow::None);
+    }
+
     #[test]
     fn render_pane_lines_response_drops_the_leading_team_face() {
         let theme = ColorTheme::default();

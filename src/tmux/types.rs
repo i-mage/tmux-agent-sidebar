@@ -32,6 +32,10 @@ pub struct PaneInfo {
     /// (`@team_face`), else its voice character while voice mode is on (from
     /// the `@voice_mode` + `@voice_emoji` pane options). Empty otherwise.
     pub car_emoji: String,
+    /// Fork-local: the window this pane lives in is run by an autonomous
+    /// Playground agent (`@agent_window` window option, set by
+    /// `agent-window-style.sh`). The row is painted in that window's colour.
+    pub agent_window: AgentWindow,
     /// Fork-local: 1-based global position in the rendered sidebar
     /// (groups sorted, traversal order inside). 0 = unassigned. Matches
     /// the Alt+q..u jump indices; assigned in `group_panes_by_repo`.
@@ -45,6 +49,29 @@ pub struct PaneInfo {
     /// pane status is `Background` (or `Running` with a backgrounded shell
     /// still alive) so the row body can surface the actual command.
     pub bg_shell_cmd: Option<String>,
+}
+
+/// Fork-local: kind of autonomous agent window, from `@agent_window`.
+/// `wa` = WhatsApp agent (`WA-*`, green); `agent` = Agenda run or sweep
+/// (`AG-*`, `FU-*`, purple). Anything else is a window the owner types in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AgentWindow {
+    #[default]
+    None,
+    WhatsApp,
+    Agent,
+}
+
+impl AgentWindow {
+    pub fn from_label(s: &str) -> Self {
+        match s {
+            "wa" => Self::WhatsApp,
+            "" => Self::None,
+            // `agent`, and the bare `1` the first version of the style
+            // script wrote, are both an Agenda/sweep window.
+            _ => Self::Agent,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
