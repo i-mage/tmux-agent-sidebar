@@ -1,10 +1,14 @@
 use super::commands::{display_message, run_tmux};
 
+/// Fork-local: the second field is "someone can see this window": the
+/// window is active in its session AND that session has a client attached.
+/// An active window of a detached session used to count as visible, so its
+/// sidebar kept the full 1 s refresh (11. 11. 2026).
+pub(crate) const SIDEBAR_PANE_INFO_FORMAT: &str =
+    "#{pane_active} #{&&:#{window_active},#{session_attached}} #{pane_width} #{pane_height}";
+
 pub fn get_sidebar_pane_info(tmux_pane: &str) -> (bool, bool, u16, u16) {
-    let out = display_message(
-        tmux_pane,
-        "#{pane_active} #{window_active} #{pane_width} #{pane_height}",
-    );
+    let out = display_message(tmux_pane, SIDEBAR_PANE_INFO_FORMAT);
     let parts: Vec<&str> = out.splitn(4, ' ').collect();
     if parts.len() >= 4 {
         (
@@ -129,5 +133,11 @@ mod tests {
             ("%2".into(), false, "/y".into()),
         ];
         assert!(pick_active_pane("%99", &panes).is_none());
+    }
+
+    #[test]
+    fn sidebar_window_counts_as_visible_only_in_an_attached_session() {
+        let visible = SIDEBAR_PANE_INFO_FORMAT.split(' ').nth(1).unwrap();
+        assert_eq!(visible, "#{&&:#{window_active},#{session_attached}}");
     }
 }
