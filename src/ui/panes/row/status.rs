@@ -8,6 +8,10 @@ use crate::tmux::PaneStatus;
 use crate::ui::icons::StatusIcons;
 use crate::ui::text::{display_width, elapsed_label, truncate_to_width};
 
+/// What the Playground hook puts before the name of a wrapped-up chat.
+const WRAPPED_PREFIX: &str = "✔ ";
+const WRAPPED_ICON: &str = "✔";
+
 pub(super) fn status_row(
     pane: &crate::tmux::PaneInfo,
     ctx: &RowCtx,
@@ -18,13 +22,29 @@ pub(super) fn status_row(
     use crate::tmux::PermissionMode;
     let theme = ctx.theme;
 
-    let (icon, pulse_color) = running_icon_for(&pane.status, spinner_frame, icons);
-    let icon_color =
-        pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention));
+    // Fork-local (11. 11. 2026, owner decision #1165): a chat wrapped up in its
+    // last turn carries "✔ <title>" in @pane_name, written by the Playground hook
+    // until the next prompt. The mark takes the place of the idle circle (the chat
+    // is free for a new topic) and is cut from the name, so it shows once. A
+    // working or waiting agent keeps its own icon.
+    let wrapped_title = pane.custom_name.strip_prefix(WRAPPED_PREFIX);
+    let wrapped = wrapped_title.is_some() && matches!(pane.status, PaneStatus::Idle);
+    let (icon, pulse_color) = if wrapped {
+        (WRAPPED_ICON, None)
+    } else {
+        running_icon_for(&pane.status, spinner_frame, icons)
+    };
+    let icon_color = if wrapped {
+        Color::Indexed(15)
+    } else {
+        pulse_color.unwrap_or_else(|| theme.status_color(&pane.status, pane.attention))
+    };
     // Fork-local: picker-assigned @pane_name wins over the scanned
     // Claude /rename session name (and updates every refresh, not only
     // when the session map goes dirty).
-    let title_raw: &str = if !pane.custom_name.is_empty() {
+    let title_raw: &str = if let Some(title) = wrapped_title {
+        title
+    } else if !pane.custom_name.is_empty() {
         &pane.custom_name
     } else if pane.session_name.is_empty() {
         pane.agent.label()

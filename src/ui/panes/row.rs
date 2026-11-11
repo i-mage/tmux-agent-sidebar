@@ -413,6 +413,51 @@ mod tests {
         assert_eq!(color, Some(Color::Indexed(82)));
     }
 
+    // Fork-local (11. 11. 2026, owner decision #1165): a chat wrapped up in its last
+    // turn carries "✔ <title>" in @pane_name (written by the Playground hook). The
+    // mark takes the place of the idle circle, so the row does not show both.
+    fn status_line_for(status: PaneStatus, name: &str) -> String {
+        let theme = ColorTheme::default();
+        let mut p = pane(PermissionMode::Default, status, "");
+        p.custom_name = name.into();
+        let lines = render_pane_lines_with_ports(
+            &p,
+            &PaneGitInfo::default(),
+            None,
+            None,
+            false,
+            false,
+            40,
+            &StatusIcons::default(),
+            &theme,
+            0,
+            0,
+            true,
+        );
+        line_text(&lines[0])
+    }
+
+    #[test]
+    fn wrapped_up_idle_chat_shows_check_mark_instead_of_circle() {
+        let text = status_line_for(PaneStatus::Idle, "✔ tmux záložky");
+        assert!(text.contains("✔ tmux záložky"), "{text}");
+        assert!(!text.contains("○"), "{text}");
+        assert_eq!(text.matches('✔').count(), 1, "{text}");
+    }
+
+    #[test]
+    fn wrapped_mark_never_hides_a_working_agent() {
+        let text = status_line_for(PaneStatus::Running, "✔ tmux záložky");
+        assert!(text.contains("● tmux záložky"), "{text}");
+        assert!(!text.contains("✔"), "{text}");
+    }
+
+    #[test]
+    fn idle_chat_without_the_mark_keeps_the_circle() {
+        let text = status_line_for(PaneStatus::Idle, "tmux záložky");
+        assert!(text.contains("○ tmux záložky"), "{text}");
+    }
+
     #[test]
     fn render_pane_lines_shows_idle_prompt_hint() {
         let theme = ColorTheme::default();
