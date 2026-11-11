@@ -1,11 +1,53 @@
 use std::process::Command;
 
 pub fn run_tmux(args: &[&str]) -> Option<String> {
+    match tmux_call_kind(args) {
+        // Fork-local: the same in every sidebar, so one runs it for all.
+        TmuxCall::SharedRead => {
+            let key = format!("tmux\u{1f}{}", args.join("\u{1f}"));
+            crate::shared_cache::shared_output(&key, std::time::Duration::ZERO, || {
+                run_tmux_now(args)
+            })
+        }
+        TmuxCall::Read => run_tmux_now(args),
+        TmuxCall::Write => {
+            let out = run_tmux_now(args);
+            crate::shared_cache::invalidate();
+            out
+        }
+    }
+}
+
+fn run_tmux_now(args: &[&str]) -> Option<String> {
     let output = Command::new("tmux").args(args).output().ok()?;
     if output.status.success() {
         Some(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         None
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum TmuxCall {
+    /// Reads server-wide state: identical in every sidebar.
+    SharedRead,
+    /// Reads state of one pane or window.
+    Read,
+    /// Anything that may change tmux state.
+    Write,
+}
+
+/// Fork-local: which tmux calls every sidebar may share (see
+/// `shared_cache`). Only the server-wide pane list is shared; a call that
+/// may change tmux state makes this process skip older shared output.
+pub(crate) fn tmux_call_kind(args: &[&str]) -> TmuxCall {
+    match args.first().copied() {
+        Some("list-panes") if args.contains(&"-a") => TmuxCall::SharedRead,
+        Some(
+            "list-panes" | "list-windows" | "list-sessions" | "display-message" | "show"
+            | "show-options" | "show-hooks" | "has-session" | "capture-pane",
+        ) => TmuxCall::Read,
+        _ => TmuxCall::Write,
     }
 }
 
@@ -106,4 +148,43 @@ pub fn select_pane(pane_id: &str) {
         let _ = run_tmux(&["select-window", "-t", &window_id]);
     }
     let _ = run_tmux(&["select-pane", "-t", pane_id]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn server_wide_pane_list_is_shared_between_sidebars() {
+        assert_eq!(
+            tmux_call_kind(&["list-panes", "-a", "-F", "#{pane_id}"]),
+            TmuxCall::SharedRead
+        );
+    }
+
+    #[test]
+    fn own_window_queries_are_not_shared() {
+        assert_eq!(
+            tmux_call_kind(&["list-panes", "-t", "%1", "-F", "#{pane_id}"]),
+            TmuxCall::Read
+        );
+        assert_eq!(
+            tmux_call_kind(&["display-message", "-t", "%1", "-p", "x"]),
+            TmuxCall::Read
+        );
+    }
+
+    #[test]
+    fn commands_that_change_tmux_count_as_writes() {
+        assert_eq!(
+            tmux_call_kind(&["set", "-t", "%1", "-p", "@k", "v"]),
+            TmuxCall::Write
+        );
+        assert_eq!(
+            tmux_call_kind(&["select-pane", "-t", "%1"]),
+            TmuxCall::Write
+        );
+        assert_eq!(tmux_call_kind(&["run-shell", "true"]), TmuxCall::Write);
+        assert_eq!(tmux_call_kind(&[]), TmuxCall::Write);
+    }
 }

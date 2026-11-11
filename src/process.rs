@@ -18,16 +18,19 @@ pub(crate) struct ProcessSnapshot {
 
 impl ProcessSnapshot {
     pub(crate) fn scan() -> Option<Self> {
-        let output = Command::new("ps")
-            .args(["-eo", "pid=,ppid=,comm=,args="])
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        Some(Self::from_ps_output(&String::from_utf8_lossy(
-            &output.stdout,
-        )))
+        // Fork-local: one `ps` for every sidebar (see `shared_cache`).
+        let ps_output =
+            crate::shared_cache::shared_output("ps", std::time::Duration::ZERO, || {
+                let output = Command::new("ps")
+                    .args(["-eo", "pid=,ppid=,comm=,args="])
+                    .output()
+                    .ok()?;
+                output
+                    .status
+                    .success()
+                    .then(|| String::from_utf8_lossy(&output.stdout).to_string())
+            })?;
+        Some(Self::from_ps_output(&ps_output))
     }
 
     pub(crate) fn from_ps_output(ps_output: &str) -> Self {

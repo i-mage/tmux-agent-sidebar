@@ -160,7 +160,11 @@ pub(crate) fn scan_session_process_snapshot(
         }
     }
 
-    let lsof_output = run_command("lsof", &["-iTCP", "-sTCP:LISTEN", "-nP", "-F", "pn"])?;
+    // Fork-local: one `lsof` for every sidebar (see `shared_cache`).
+    let lsof_output =
+        crate::shared_cache::shared_output("lsof", crate::shared_cache::PORTS_MIN_AGE, || {
+            run_command("lsof", &["-iTCP", "-sTCP:LISTEN", "-nP", "-F", "pn"])
+        })?;
     let listening = parse_lsof_listening_ports(&lsof_output);
 
     let mut ports_by_pane: HashMap<String, BTreeSet<u16>> = HashMap::new();

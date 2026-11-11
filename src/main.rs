@@ -74,6 +74,8 @@ fn main() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // Fork-local: only the long-running sidebar shares command output.
+    tmux_agent_sidebar::shared_cache::enable();
     app::run(&mut terminal, tmux_pane, &NEEDS_REFRESH)
 }
 

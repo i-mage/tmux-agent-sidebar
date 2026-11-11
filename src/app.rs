@@ -104,6 +104,11 @@ pub fn run(
                     render::render_frame(terminal, &mut state)?;
                 }
             }
+            // Fork-local: a hidden sidebar reads what the visible one just
+            // collected instead of running the same commands itself. A
+            // signalled refresh means somebody is looking, so it wants
+            // fresh data.
+            crate::shared_cache::set_max_age(shared_max_age(sigusr1, hidden));
             let is_window_active = state.refresh();
             if state.focus_state.focused_pane_id != previous_focused_pane_id {
                 render::refresh_git_for_focused_pane(&mut state);
@@ -180,6 +185,15 @@ fn git_poll_wanted(git_tab_shown: bool, hidden: bool) -> bool {
     git_tab_shown && !hidden
 }
 
+/// Fork-local: how old shared command output this refresh accepts.
+fn shared_max_age(signalled: bool, hidden: bool) -> Duration {
+    if hidden && !signalled {
+        crate::shared_cache::HIDDEN_MAX_AGE
+    } else {
+        crate::shared_cache::VISIBLE_MAX_AGE
+    }
+}
+
 /// How long the loop waits for input before the next pass. A hidden sidebar
 /// never advances its spinner, so its spinner deadline stays in the past;
 /// counting it would poll with a zero timeout and spin a core (11. 11. 2026).
@@ -243,6 +257,16 @@ mod tests {
     fn visible_git_tab_polls_git() {
         assert!(git_poll_wanted(true, false));
         assert!(!git_poll_wanted(false, false));
+    }
+
+    #[test]
+    fn hidden_sidebar_reads_older_shared_output_than_a_visible_one() {
+        use crate::shared_cache::{HIDDEN_MAX_AGE, VISIBLE_MAX_AGE};
+        assert_eq!(shared_max_age(false, true), HIDDEN_MAX_AGE);
+        assert_eq!(shared_max_age(false, false), VISIBLE_MAX_AGE);
+        // Switching to the window signals the sidebar: fresh data at once.
+        assert_eq!(shared_max_age(true, true), VISIBLE_MAX_AGE);
+        assert!(HIDDEN_MAX_AGE > Duration::from_secs(10));
     }
 
     #[test]

@@ -30,15 +30,22 @@ pub fn resolve_pane_git_info(path: &str) -> PaneGitInfo {
     }
 
     // Single git call for all three values (one line per arg)
-    let combined = run_git(
-        path,
-        &[
-            "rev-parse",
-            "--abbrev-ref",
-            "HEAD",
-            "--git-common-dir",
-            "--git-dir",
-        ],
+    // Fork-local: one `git` per path for every sidebar (see `shared_cache`).
+    let combined = crate::shared_cache::shared_output(
+        &format!("git-pane-info\u{1f}{path}"),
+        crate::shared_cache::GIT_MIN_AGE,
+        || {
+            run_git(
+                path,
+                &[
+                    "rev-parse",
+                    "--abbrev-ref",
+                    "HEAD",
+                    "--git-common-dir",
+                    "--git-dir",
+                ],
+            )
+        },
     );
     let (branch, git_common_dir, git_dir) = match combined {
         Some(output) => {
