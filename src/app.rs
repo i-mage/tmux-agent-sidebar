@@ -43,11 +43,12 @@ pub fn run(
 
     let mut last_refresh = std::time::Instant::now();
     let mut last_spinner = std::time::Instant::now();
-    let refresh_interval = Duration::from_secs(1);
     let spinner_interval = Duration::from_millis(200);
     let mut needs_redraw = true;
 
     loop {
+        let refresh_interval = refresh_interval_for(window_inactive_count);
+        let hidden = is_hidden(window_inactive_count);
         if needs_redraw {
             render::render_frame(terminal, &mut state)?;
             needs_redraw = false;
@@ -82,7 +83,9 @@ pub fn run(
             state.run_pending_activation();
         }
 
-        if last_spinner.elapsed() >= spinner_interval {
+        // Fork-local: a sidebar in a window nobody is looking at does not
+        // animate; the spinner only costs tmux and terminal redraws there.
+        if !hidden && last_spinner.elapsed() >= spinner_interval {
             state.spinner_frame = (state.spinner_frame + 1) % SPINNER_PULSE.len();
             if state.pet_enabled {
                 let term_width = terminal.size().map(|s| s.width).unwrap_or(60);
@@ -141,5 +144,46 @@ pub fn run(
         state
             .global
             .flush_pending_cursor_save(std::time::Duration::from_millis(120));
+    }
+}
+
+/// Refreshes in a row that found the sidebar's window inactive before the
+/// sidebar counts as hidden.
+const HIDDEN_AFTER_INACTIVE_REFRESHES: u32 = 2;
+
+/// Fork-local: how often the full refresh runs. Every refresh snapshots all
+/// processes and runs `ps`, several `tmux` calls and one `git` per agent pane,
+/// and every window carries its own sidebar, so a dozen hidden sidebars
+/// refreshing every second kept the Mac busy with ~1,500 new processes a
+/// second (Agenda #806, 11. 11. 2026). A hidden sidebar refreshes every 10 s;
+/// switching to its window sends SIGUSR1, which refreshes it at once.
+fn refresh_interval_for(window_inactive_count: u32) -> Duration {
+    if is_hidden(window_inactive_count) {
+        Duration::from_secs(10)
+    } else {
+        Duration::from_secs(1)
+    }
+}
+
+fn is_hidden(window_inactive_count: u32) -> bool {
+    window_inactive_count >= HIDDEN_AFTER_INACTIVE_REFRESHES
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visible_sidebar_refreshes_every_second() {
+        assert_eq!(refresh_interval_for(0), Duration::from_secs(1));
+        assert_eq!(refresh_interval_for(1), Duration::from_secs(1));
+        assert!(!is_hidden(1));
+    }
+
+    #[test]
+    fn hidden_sidebar_refreshes_every_ten_seconds() {
+        assert!(is_hidden(2));
+        assert_eq!(refresh_interval_for(2), Duration::from_secs(10));
+        assert_eq!(refresh_interval_for(u32::MAX), Duration::from_secs(10));
     }
 }
