@@ -54,15 +54,12 @@ pub fn run(
             needs_redraw = false;
         }
 
-        let refresh_timeout = refresh_interval.saturating_sub(last_refresh.elapsed());
-        let spinner_timeout = spinner_interval.saturating_sub(last_spinner.elapsed());
-        let timeout = if needs_refresh.load(Ordering::Relaxed) {
-            Duration::ZERO
-        } else {
-            refresh_timeout
-                .min(spinner_timeout)
-                .min(Duration::from_millis(16))
-        };
+        let timeout = poll_timeout(
+            needs_refresh.load(Ordering::Relaxed),
+            hidden,
+            refresh_interval.saturating_sub(last_refresh.elapsed()),
+            spinner_interval.saturating_sub(last_spinner.elapsed()),
+        );
         if event::poll(timeout)? {
             loop {
                 let ev = event::read()?;
@@ -169,6 +166,26 @@ fn is_hidden(window_inactive_count: u32) -> bool {
     window_inactive_count >= HIDDEN_AFTER_INACTIVE_REFRESHES
 }
 
+/// How long the loop waits for input before the next pass. A hidden sidebar
+/// never advances its spinner, so its spinner deadline stays in the past;
+/// counting it would poll with a zero timeout and spin a core (11. 11. 2026).
+fn poll_timeout(
+    refresh_pending: bool,
+    hidden: bool,
+    refresh_timeout: Duration,
+    spinner_timeout: Duration,
+) -> Duration {
+    if refresh_pending {
+        return Duration::ZERO;
+    }
+    let timeout = refresh_timeout.min(Duration::from_millis(16));
+    if hidden {
+        timeout
+    } else {
+        timeout.min(spinner_timeout)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +202,27 @@ mod tests {
         assert!(is_hidden(2));
         assert_eq!(refresh_interval_for(2), Duration::from_secs(10));
         assert_eq!(refresh_interval_for(u32::MAX), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn hidden_sidebar_does_not_spin_on_a_stale_spinner() {
+        // A hidden sidebar never advances its spinner, so the spinner
+        // deadline is long past; the loop must still sleep between passes.
+        let timeout = poll_timeout(false, true, Duration::from_secs(9), Duration::ZERO);
+        assert_eq!(timeout, Duration::from_millis(16));
+    }
+
+    #[test]
+    fn visible_sidebar_wakes_for_its_spinner() {
+        let timeout = poll_timeout(false, false, Duration::from_secs(1), Duration::ZERO);
+        assert_eq!(timeout, Duration::ZERO);
+    }
+
+    #[test]
+    fn pending_refresh_polls_without_waiting() {
+        assert_eq!(
+            poll_timeout(true, true, Duration::from_secs(9), Duration::from_secs(1)),
+            Duration::ZERO
+        );
     }
 }
