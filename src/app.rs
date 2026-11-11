@@ -118,7 +118,13 @@ pub fn run(
             } else {
                 window_inactive_count = window_inactive_count.saturating_add(1);
             }
-            git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
+            git_tab_active.store(
+                git_poll_wanted(
+                    state.bottom_tab == BottomTab::GitStatus,
+                    is_hidden(window_inactive_count),
+                ),
+                Ordering::Relaxed,
+            );
             last_refresh = std::time::Instant::now();
         }
 
@@ -164,6 +170,14 @@ fn refresh_interval_for(window_inactive_count: u32) -> Duration {
 
 fn is_hidden(window_inactive_count: u32) -> bool {
     window_inactive_count >= HIDDEN_AFTER_INACTIVE_REFRESHES
+}
+
+/// Fork-local: whether the background git poll (about eight `git` runs every
+/// 2 s) should run. A hidden sidebar never shows its Git tab, and twelve of
+/// them polling were most of ~1,000 new processes a second (11. 11. 2026).
+/// Switching back to the window refreshes at once and turns the poll back on.
+fn git_poll_wanted(git_tab_shown: bool, hidden: bool) -> bool {
+    git_tab_shown && !hidden
 }
 
 /// How long the loop waits for input before the next pass. A hidden sidebar
@@ -216,6 +230,19 @@ mod tests {
     fn visible_sidebar_wakes_for_its_spinner() {
         let timeout = poll_timeout(false, false, Duration::from_secs(1), Duration::ZERO);
         assert_eq!(timeout, Duration::ZERO);
+    }
+
+    #[test]
+    fn hidden_sidebar_does_not_poll_git() {
+        // Twelve hidden sidebars polling git every 2 s were most of the
+        // ~1,000 new processes a second on 11. 11. 2026.
+        assert!(!git_poll_wanted(true, true));
+    }
+
+    #[test]
+    fn visible_git_tab_polls_git() {
+        assert!(git_poll_wanted(true, false));
+        assert!(!git_poll_wanted(false, false));
     }
 
     #[test]
