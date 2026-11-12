@@ -5,7 +5,6 @@ use crate::tmux::SessionInfo;
 
 #[derive(Debug, Default, Clone)]
 pub struct PaneProcessSnapshot {
-    pub ports_by_pane: HashMap<String, Vec<u16>>,
     pub command_by_pane: HashMap<String, String>,
     pub live_agent_panes: HashSet<String>,
 }
@@ -114,39 +113,24 @@ pub(crate) fn scan_session_process_snapshot(
     }
 
     Some(PaneProcessSnapshot {
-        // Fork-local: no listening-port scan (no `lsof`). Every Claude Code
-        // instance listens on a random localhost port, so the sidebar only
-        // showed noise; the owner does not track ports.
-        ports_by_pane: HashMap::new(),
         command_by_pane,
         live_agent_panes,
     })
-}
-
-/// Scan listening TCP ports for panes in the provided sessions.
-/// The lookup starts from each pane's PID and walks the process tree, so it can
-/// pick up child dev servers spawned by an agent shell.
-pub fn scan_session_ports(sessions: &[SessionInfo]) -> HashMap<String, Vec<u16>> {
-    scan_session_process_snapshot(sessions, None)
-        .map(|snapshot| snapshot.ports_by_pane)
-        .unwrap_or_default()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Fork-local: the sidebar shows no listening ports. Every Claude Code
-    /// instance listens on a random localhost port, so the row only showed
-    /// noise. A pane whose own process listens must still report none.
+    /// Fork-local: the snapshot only carries liveness and the command; the
+    /// listening-port scan (`lsof`) is gone (owner, 12. 11. 2026).
     #[test]
-    fn scan_reports_no_ports_even_when_pane_process_listens() {
+    fn scan_marks_live_agent_pane_without_lsof() {
         use crate::tmux::{
             AgentType, AgentWindow, PaneInfo, PaneStatus, PermissionMode, WindowInfo,
             WorktreeMetadata,
         };
 
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let pid = std::process::id();
         let pane = PaneInfo {
             pane_id: "%1".into(),
@@ -187,9 +171,7 @@ mod tests {
 
         let scanned = scan_session_process_snapshot(&sessions, Some(&snapshot)).unwrap();
 
-        assert!(scanned.ports_by_pane.is_empty());
         assert!(scanned.live_agent_panes.contains("%1"));
-        drop(listener);
     }
 
     #[test]

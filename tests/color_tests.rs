@@ -39,7 +39,6 @@ fn test_all_color_theme_defaults() {
 
     // Header/UI element colors
     assert_eq!(theme.session_header, Color::Indexed(39));
-    assert_eq!(theme.port, Color::Indexed(246));
     assert_eq!(theme.wait_reason, Color::Indexed(221));
     assert_eq!(theme.branch, Color::Indexed(109));
 
@@ -789,7 +788,6 @@ fn test_custom_theme_new_fields_override() {
         diff_deleted: Color::Indexed(160),
         file_change: Color::Indexed(208),
         pr_link: Color::Indexed(33),
-        port: Color::Indexed(82),
         ..ColorTheme::default()
     };
 
@@ -802,7 +800,6 @@ fn test_custom_theme_new_fields_override() {
     assert_eq!(theme.diff_deleted, Color::Indexed(160));
     assert_eq!(theme.file_change, Color::Indexed(208));
     assert_eq!(theme.pr_link, Color::Indexed(33));
-    assert_eq!(theme.port, Color::Indexed(82));
 
     // Original fields should still be default
     assert_eq!(theme.accent, Color::Indexed(153));

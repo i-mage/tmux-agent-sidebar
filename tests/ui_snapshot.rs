@@ -691,33 +691,6 @@ fn snapshot_worktree_long_branch_truncated_ui() {
     ");
 }
 
-#[test]
-fn snapshot_long_branch_with_ports_ui() {
-    let pane = make_pane(AgentType::Claude, PaneStatus::Running);
-    let git_info = PaneGitInfo {
-        repo_root: Some("/home/user/project".into()),
-        branch: Some("feature/sidebar/really-long-branch-name-that-should-truncate".into()),
-        is_worktree: false,
-        worktree_name: None,
-    };
-    let mut state = make_state_with_groups(vec![tmux_agent_sidebar::group::RepoGroup {
-        name: "project".into(),
-        has_focus: true,
-        panes: vec![(pane, git_info)],
-    }]);
-    state.set_pane_ports("%1", vec![3000, 5173]);
-
-    let output = render_to_string(&mut state, 40, 24);
-    insta::assert_snapshot!(output, @"
-    project                                +
-    ┃● claude
-    ┃  feature/sidebar/really-…  :3000, 5173
-    ╭ Activity │ Git ──────────────────────╮
-    │            No activity yet           │
-    ╰──────────────────────────────────────╯
-    ");
-}
-
 // ─── Task Progress Variations ─────────────────────────────────────
 
 #[test]
@@ -1770,43 +1743,6 @@ fn snapshot_sidebar_spawned_long_branch_truncates_and_keeps_x() {
     // truncation — the × is at the right edge of the branch row.
     let targets = &state.layout.spawn_remove_targets;
     assert_eq!(targets.len(), 1, "click target must still be registered");
-}
-
-#[test]
-fn snapshot_sidebar_spawned_coexists_with_port_display() {
-    // Sanity check: when ports are active on the pane, both the
-    // trailing `×` AND the port list must render. The `×` stays
-    // pinned to the end of the branch text (left side), ports on
-    // the far right — they do not overwrite each other.
-    let mut spawned = make_pane(AgentType::Claude, PaneStatus::Idle);
-    spawned.pane_id = "%9".into();
-    spawned.sidebar_spawned = true;
-    let group = RepoGroup {
-        name: "proj".into(),
-        has_focus: true,
-        panes: vec![(
-            spawned,
-            PaneGitInfo {
-                repo_root: Some("/home/u/proj".into()),
-                branch: Some("feat/srv".into()),
-                is_worktree: true,
-                worktree_name: None,
-            },
-        )],
-    };
-    let mut state = make_state_with_groups(vec![group]);
-    state.bottom_panel_height = 3;
-    state.pane_state_mut("%9").ports = vec![3000];
-    let output = render_to_string(&mut state, 30, 20);
-    insta::assert_snapshot!(output, @"
-    proj                         +
-     ○ claude
-       + feat/srv          :3000 ×
-       Waiting for prompt…
-    ╭ Activity │ Git ────────────╮
-    │       No activity yet      │
-    ╰────────────────────────────╯
-    ");
 }
 
 #[test]

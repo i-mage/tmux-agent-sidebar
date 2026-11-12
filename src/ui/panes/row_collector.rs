@@ -92,13 +92,11 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
             let is_active = state.focus_state.focused_pane_id.as_ref() == Some(&pane.pane_id);
 
             let pane_state = state.pane_state(&pane.pane_id);
-            let ports = pane_state.map(|s| s.ports.as_slice());
             let task_progress = pane_state.and_then(|s| s.task_progress.as_ref());
             let status_line_idx = collected.lines.len();
-            let pane_lines = row::render_pane_lines_with_ports(
+            let pane_lines = row::render_pane_lines(
                 pane,
                 git_info,
-                ports,
                 task_progress,
                 is_selected,
                 is_active,
@@ -116,7 +114,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
             }
 
             // The branch row is always `status_line_idx + 1` when
-            // `branch_ports_row` emits a line (which requires a
+            // `branch_row` emits a line (which requires a
             // non-empty branch). Look up the exact column of the
             // trailing `×` from the row helper so the click target
             // lines up with the rendered glyph even when the branch
@@ -126,7 +124,6 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
                 && pane_line_count >= 2
                 && let Some(x) = row::sidebar_remove_marker_col(
                     git_info,
-                    ports,
                     true,
                     width.saturating_sub(1),
                     state.show_branch,

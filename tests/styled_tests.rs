@@ -374,7 +374,6 @@ fn snapshot_custom_theme_colors() {
         accent: Color::Indexed(196),       // red accent
         agent_claude: Color::Indexed(226), // yellow agent
         status_idle: Color::Indexed(46),   // green idle
-        port: Color::Indexed(39),          // cyan port
         ..ColorTheme::default()
     };
     // Unfocus sidebar so selected row doesn't use REVERSED (which hides colors)

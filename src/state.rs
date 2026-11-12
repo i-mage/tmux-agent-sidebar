@@ -556,7 +556,6 @@ mod tests {
         let mut state = AppState::new("%99".into());
         let pane_id = "%213";
 
-        state.set_pane_ports(pane_id, vec![3000, 5173]);
         state.set_pane_command(pane_id, Some("npm run dev".into()));
         state.set_pane_task_progress(
             pane_id,
@@ -567,7 +566,6 @@ mod tests {
         state.set_pane_task_dismissed_total(pane_id, Some(4));
         state.set_pane_inactive_since(pane_id, Some(123));
 
-        assert_eq!(state.pane_ports(pane_id), Some(&[3000, 5173][..]));
         assert_eq!(state.pane_command(pane_id), Some("npm run dev"));
         assert_eq!(
             state.pane_task_progress(pane_id).map(|p| p.total()),
@@ -588,14 +586,12 @@ mod tests {
             has_focus: true,
             panes: vec![(test_pane("%1"), PaneGitInfo::default())],
         }];
-        state.set_pane_ports("%1", vec![3000]);
         state.set_pane_command("%1", Some("npm run dev".into()));
-        state.set_pane_ports("%2", vec![5173]);
+        state.set_pane_command("%2", Some("vite".into()));
         state.set_pane_task_dismissed_total("%2", Some(2));
 
         state.prune_pane_states_to_current_panes();
 
-        assert_eq!(state.pane_ports("%1"), Some(&[3000][..]));
         assert_eq!(state.pane_command("%1"), Some("npm run dev"));
         assert!(state.pane_state("%2").is_none());
     }

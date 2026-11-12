@@ -6,7 +6,7 @@ use ratatui::{
 use super::ctx::RowCtx;
 use crate::ui::text::{display_width, truncate_to_width};
 
-/// Left indent before the branch label inside [`branch_ports_row`].
+/// Left indent before the branch label inside [`branch_row`].
 const BRANCH_ROW_LEFT_PREFIX: &str = "  ";
 
 /// The branch label for rendering: empty when hidden via
@@ -18,25 +18,6 @@ fn effective_branch_label(git_info: &crate::group::PaneGitInfo, show_branch: boo
     } else {
         String::new()
     }
-}
-
-/// Port-info prefix placed between the branch text and the port list
-/// when both are shown on the same row.
-const BRANCH_ROW_PORT_PREFIX: &str = "  ";
-
-/// Build the port text for the right side of the branch row, if any.
-fn port_display_text(ports: Option<&[u16]>) -> Option<String> {
-    ports.and_then(|ports| {
-        if ports.is_empty() {
-            return None;
-        }
-        let joined = ports
-            .iter()
-            .map(u16::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
-        Some(format!(":{}", joined))
-    })
 }
 
 /// Whether the trailing `×` remove marker should even be considered
@@ -58,7 +39,6 @@ fn should_emit_remove_marker(
 /// when the pane is not eligible.
 pub fn sidebar_remove_marker_col(
     git_info: &crate::group::PaneGitInfo,
-    _ports: Option<&[u16]>,
     sidebar_spawned: bool,
     inner_width: usize,
     show_branch: bool,
@@ -71,49 +51,27 @@ pub fn sidebar_remove_marker_col(
     Some(inner_width as u16)
 }
 
-pub(super) fn branch_ports_row(
+pub(super) fn branch_row(
     git_info: &crate::group::PaneGitInfo,
-    ports: Option<&[u16]>,
     sidebar_spawned: bool,
     show_branch: bool,
     ctx: &RowCtx,
 ) -> Option<Line<'static>> {
     let branch = effective_branch_label(git_info, show_branch);
-    let port_text = port_display_text(ports);
-
-    if branch.is_empty() && port_text.is_none() {
+    if branch.is_empty() {
         return None;
     }
 
     let theme = ctx.theme;
     let left_prefix = BRANCH_ROW_LEFT_PREFIX;
-    let right_prefix = BRANCH_ROW_PORT_PREFIX;
 
     // The sidebar-spawned remove affordance is pinned to the right
-    // edge, mirroring the repo header's right-aligned `+` spawn
-    // button. When ports are also present they stack to the left of
-    // the `×`, separated by a single space.
+    // edge, mirroring the repo header's right-aligned `+` spawn button.
     let emit_remove_marker = sidebar_spawned && branch.starts_with("+ ");
 
     let mut right_spans: Vec<Span<'static>> = Vec::new();
     let mut right_width: usize = 0;
-    if let Some(text) = port_text.as_ref() {
-        let display = format!("{}{}", right_prefix, text);
-        let width = display_width(&display);
-        right_spans.push(Span::styled(
-            display,
-            ctx.apply_bg(Style::default().fg(theme.port)),
-        ));
-        right_width += width;
-    }
     if emit_remove_marker {
-        if right_width > 0 {
-            right_spans.push(Span::styled(
-                " ".to_string(),
-                ctx.apply_bg(Style::default()),
-            ));
-            right_width += 1;
-        }
         right_spans.push(Span::styled(
             "×".to_string(),
             ctx.apply_bg(Style::default().fg(theme.status_error)),
@@ -121,22 +79,15 @@ pub(super) fn branch_ports_row(
         right_width += 1;
     }
 
-    let (left_spans, left_width) = if branch.is_empty() {
-        (vec![], 0)
-    } else {
-        let left_room = ctx.inner_width.saturating_sub(right_width);
-        let max_branch_width = left_room.saturating_sub(display_width(left_prefix));
-        let truncated = truncate_to_width(&branch, max_branch_width);
-        let text = format!("{}{}", left_prefix, truncated);
-        let width = display_width(&text);
-        (
-            vec![Span::styled(
-                text,
-                ctx.apply_bg(Style::default().fg(theme.branch)),
-            )],
-            width,
-        )
-    };
+    let left_room = ctx.inner_width.saturating_sub(right_width);
+    let max_branch_width = left_room.saturating_sub(display_width(left_prefix));
+    let truncated = truncate_to_width(&branch, max_branch_width);
+    let text = format!("{}{}", left_prefix, truncated);
+    let left_width = display_width(&text);
+    let left_spans = vec![Span::styled(
+        text,
+        ctx.apply_bg(Style::default().fg(theme.branch)),
+    )];
 
     Some(ctx.row_line_split(left_spans, left_width, right_spans, right_width))
 }

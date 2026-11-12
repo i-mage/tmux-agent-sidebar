@@ -27,7 +27,6 @@ pub struct ColorTheme {
     pub text_muted: Color,
     pub text_inactive: Color,
     pub session_header: Color,
-    pub port: Color,
     pub wait_reason: Color,
     pub selection_bg: Color,
     /// Fork-local: background behind every row of the pane focused in tmux,
@@ -76,7 +75,6 @@ impl Default for ColorTheme {
             text_muted: Color::Indexed(252),
             text_inactive: Color::Indexed(244),
             session_header: Color::Indexed(39),
-            port: Color::Indexed(246),
             wait_reason: Color::Indexed(221),
             selection_bg: Color::Indexed(239),
             active_bg: Color::Indexed(236),
@@ -135,7 +133,6 @@ impl ColorTheme {
         theme.text_muted = read(tmux::SIDEBAR_COLOR_TEXT_MUTED, theme.text_muted);
         theme.text_inactive = read(tmux::SIDEBAR_COLOR_TEXT_INACTIVE, theme.text_inactive);
         theme.session_header = read(tmux::SIDEBAR_COLOR_SESSION, theme.session_header);
-        theme.port = read(tmux::SIDEBAR_COLOR_PORT, theme.port);
         theme.wait_reason = read(tmux::SIDEBAR_COLOR_WAIT_REASON, theme.wait_reason);
         theme.selection_bg = read(tmux::SIDEBAR_COLOR_SELECTION, theme.selection_bg);
         theme.active_bg = read(tmux::SIDEBAR_COLOR_ACTIVE_BG, theme.active_bg);

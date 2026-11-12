@@ -25,7 +25,7 @@ Each pane's runtime data is split into two buckets:
 | Source | Update Trigger | Description |
 |--------|----------------|-------------|
 | tmux pane options | Event-driven + cleanup on agent exit | Agent type, status, cwd, permission mode, prompt, subagents, worktree, etc. |
-| `PaneRuntimeState` in `AppState` | Refresh cycle + cleanup on agent exit | `ports`, `command`, `task_progress`, `task_dismissed_total`, `inactive_since` |
+| `PaneRuntimeState` in `AppState` | Refresh cycle + cleanup on agent exit | `command`, `task_progress`, `task_dismissed_total`, `inactive_since` |
 
 Pane options written to tmux:
 
@@ -52,7 +52,6 @@ pane disappears (`prune_pane_states_to_current_panes`).
 
 | Field | Update Frequency | Description |
 |-------|-----------------|-------------|
-| `pane_states.map[...].ports` | Every 10s (port scan) | Listening localhost ports detected from the pane process tree |
 | `pane_states.map[...].command` | Every 10s (port scan) | Best-effort commandline for the pane process tree, with tmux command fallback in the UI |
 | `pane_states.map[...].task_progress` | Every 1s (refresh cycle) | Parsed from activity log — task list per pane |
 | `pane_states.map[...].task_dismissed_total` | On task completion | Tracks dismissed completed-task counts |
@@ -115,7 +114,7 @@ Per-pane file-based state:
 │  pane_states.map[..].task_progress                          │
 ├─────────────────────────────────────────────────────────────┤
 │  Every 10s (port scan, background)                          │
-│  pane_states.map[..].ports, agent liveness cleanup          │
+│  pane_states.map[..].command, agent liveness cleanup        │
 ├─────────────────────────────────────────────────────────────┤
 │  Every 10s (session_names background thread)                │
 │  sessions.names map populated by session_poll_loop          │
@@ -160,7 +159,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render})
     → rebuild_row_targets()          ← lists every agent pane
     → refresh_activity_data()        ← reads /tmp activity logs
     → refresh_task_progress()        ← updates PaneRuntimeState.task_progress
-    → refresh_port_data()            ← updates PaneRuntimeState.ports
+    → refresh_port_data()            ← updates PaneRuntimeState.command
     → scan_session_process_snapshot() ← detects dead panes and clears stale tmux metadata
                         ↓
   → git_rx.try_recv()                ← receives GitData from background thread
@@ -218,7 +217,6 @@ struct HyperlinkOverlay {
 }
 
 struct PaneRuntimeState {
-    ports: Vec<u16>,
     command: Option<String>,
     task_progress: Option<TaskProgress>,
     task_dismissed_total: Option<usize>,
@@ -301,6 +299,6 @@ struct RefreshTimers {
 6. Global state syncs via tmux variables — enables coordination across sidebar instances
 7. Scroll positions are independent per panel — agents, activity, git each have their own `ScrollState`
 8. `layout.line_to_row` is rebuilt every frame — ensures accurate click routing
-9. Pane runtime state is pruned when the pane disappears — prevents stale per-pane ports, task progress, and tab preferences from surviving after the agent is gone
+9. Pane runtime state is pruned when the pane disappears — prevents stale per-pane commands, task progress, and tab preferences from surviving after the agent is gone
 10. At most one popup is open at a time — enforced structurally by the `PopupState` enum, not by parallel boolean flags
 10. Hook-based cleanup wins when available; pid-based cleanup is a slower fallback that removes panes when the agent process is gone but the hook did not fire
