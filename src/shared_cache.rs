@@ -2,7 +2,7 @@
 //! 11. 11. 2026).
 //!
 //! Every tmux window carries its own sidebar process and each used to run the
-//! same global commands on its own: `tmux list-panes -a`, `ps`, `lsof` and one
+//! same global commands on its own: `tmux list-panes -a`, `ps` and one
 //! `git rev-parse` per repo. With a dozen windows that was a few hundred new
 //! processes a second for data that is identical in every sidebar.
 //!
@@ -31,9 +31,6 @@ pub const HIDDEN_MAX_AGE: Duration = Duration::from_secs(15);
 /// Branch and repo root of a pane path change rarely, so even a visible
 /// sidebar accepts them this old.
 pub const GIT_MIN_AGE: Duration = Duration::from_secs(3);
-
-/// Listening ports were already scanned only every 10 s per sidebar.
-pub const PORTS_MIN_AGE: Duration = Duration::from_secs(9);
 
 static MAX_AGE_MS: AtomicU64 = AtomicU64::new(900);
 /// Shared output written before this moment is stale for this process: it

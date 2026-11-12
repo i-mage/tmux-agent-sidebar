@@ -1,5 +1,4 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::process::Command;
+use std::collections::{HashMap, HashSet};
 
 use crate::process::{ProcessSnapshot, command_basename};
 use crate::tmux::SessionInfo;
@@ -9,15 +8,6 @@ pub struct PaneProcessSnapshot {
     pub ports_by_pane: HashMap<String, Vec<u16>>,
     pub command_by_pane: HashMap<String, String>,
     pub live_agent_panes: HashSet<String>,
-}
-
-fn run_command(cmd: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(cmd).args(args).output().ok()?;
-    if output.status.success() {
-        Some(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        None
-    }
 }
 
 fn parse_pane_pids(sessions: &[SessionInfo]) -> HashMap<String, u32> {
@@ -83,35 +73,6 @@ fn best_command_for_pane(pane_pid: u32, process_snapshot: &ProcessSnapshot) -> O
         .map(|(_, command)| command)
 }
 
-fn extract_port(name: &str) -> Option<u16> {
-    let trimmed = name.trim();
-    let (_, tail) = trimmed.rsplit_once(':')?;
-    let digits: String = tail.chars().take_while(|c| c.is_ascii_digit()).collect();
-    if digits.is_empty() {
-        return None;
-    }
-    digits.parse::<u16>().ok()
-}
-
-fn parse_lsof_listening_ports(lsof_output: &str) -> Vec<(u32, u16)> {
-    let mut current_pid: Option<u32> = None;
-    let mut out = Vec::new();
-
-    for line in lsof_output.lines() {
-        if let Some(rest) = line.strip_prefix('p') {
-            current_pid = rest.parse::<u32>().ok();
-            continue;
-        }
-        if let Some(rest) = line.strip_prefix('n')
-            && let (Some(pid), Some(port)) = (current_pid, extract_port(rest))
-        {
-            out.push((pid, port));
-        }
-    }
-
-    out
-}
-
 /// Scan per-pane process state for the provided sessions.
 /// The lookup starts from each pane's PID and walks the process tree, so it can
 /// pick up child dev servers spawned by an agent shell and detect when the
@@ -134,7 +95,6 @@ pub(crate) fn scan_session_process_snapshot(
         }
     };
 
-    let mut pid_to_panes: HashMap<u32, Vec<String>> = HashMap::new();
     let mut live_agent_panes: HashSet<String> = HashSet::new();
     let mut command_by_pane: HashMap<String, String> = HashMap::new();
     for session in sessions {
@@ -143,47 +103,21 @@ pub(crate) fn scan_session_process_snapshot(
                 let Some(&pane_pid) = pane_pids.get(&pane.pane_id) else {
                     continue;
                 };
-                let descendant_set = process_snapshot.descendants(&[pane_pid]);
                 if process_snapshot.tree_has_agent(&[pane_pid], &pane.agent) {
                     live_agent_panes.insert(pane.pane_id.clone());
                 }
                 if let Some(command) = best_command_for_pane(pane_pid, process_snapshot) {
                     command_by_pane.insert(pane.pane_id.clone(), command);
                 }
-                for pid in descendant_set {
-                    pid_to_panes
-                        .entry(pid)
-                        .or_default()
-                        .push(pane.pane_id.clone());
-                }
-            }
-        }
-    }
-
-    // Fork-local: one `lsof` for every sidebar (see `shared_cache`).
-    let lsof_output =
-        crate::shared_cache::shared_output("lsof", crate::shared_cache::PORTS_MIN_AGE, || {
-            run_command("lsof", &["-iTCP", "-sTCP:LISTEN", "-nP", "-F", "pn"])
-        })?;
-    let listening = parse_lsof_listening_ports(&lsof_output);
-
-    let mut ports_by_pane: HashMap<String, BTreeSet<u16>> = HashMap::new();
-    for (pid, port) in listening {
-        if let Some(panes) = pid_to_panes.get(&pid) {
-            for pane_id in panes {
-                ports_by_pane
-                    .entry(pane_id.clone())
-                    .or_default()
-                    .insert(port);
             }
         }
     }
 
     Some(PaneProcessSnapshot {
-        ports_by_pane: ports_by_pane
-            .into_iter()
-            .map(|(pane_id, ports)| (pane_id, ports.into_iter().collect()))
-            .collect(),
+        // Fork-local: no listening-port scan (no `lsof`). Every Claude Code
+        // instance listens on a random localhost port, so the sidebar only
+        // showed noise; the owner does not track ports.
+        ports_by_pane: HashMap::new(),
         command_by_pane,
         live_agent_panes,
     })
@@ -202,20 +136,60 @@ pub fn scan_session_ports(sessions: &[SessionInfo]) -> HashMap<String, Vec<u16>>
 mod tests {
     use super::*;
 
+    /// Fork-local: the sidebar shows no listening ports. Every Claude Code
+    /// instance listens on a random localhost port, so the row only showed
+    /// noise. A pane whose own process listens must still report none.
     #[test]
-    fn extract_port_handles_common_lsof_names() {
-        assert_eq!(extract_port("127.0.0.1:3000"), Some(3000));
-        assert_eq!(extract_port("*:5173"), Some(5173));
-        assert_eq!(extract_port("localhost:http"), None);
-    }
+    fn scan_reports_no_ports_even_when_pane_process_listens() {
+        use crate::tmux::{
+            AgentType, AgentWindow, PaneInfo, PaneStatus, PermissionMode, WindowInfo,
+            WorktreeMetadata,
+        };
 
-    #[test]
-    fn parse_lsof_listening_ports_pairs_pid_and_port() {
-        let sample = "p123\nn127.0.0.1:3000\np456\nn*:5173\n";
-        assert_eq!(
-            parse_lsof_listening_ports(sample),
-            vec![(123, 3000), (456, 5173)]
-        );
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let pid = std::process::id();
+        let pane = PaneInfo {
+            pane_id: "%1".into(),
+            pane_active: false,
+            status: PaneStatus::Running,
+            attention: false,
+            agent: AgentType::Claude,
+            path: "/tmp".into(),
+            current_command: String::new(),
+            prompt: String::new(),
+            prompt_is_response: false,
+            started_at: None,
+            wait_reason: String::new(),
+            permission_mode: PermissionMode::Default,
+            subagents: vec![],
+            pane_pid: Some(pid),
+            worktree: WorktreeMetadata::default(),
+            session_id: None,
+            session_name: String::new(),
+            custom_name: String::new(),
+            car_emoji: String::new(),
+            agent_window: AgentWindow::None,
+            ordinal: 0,
+            sidebar_spawned: false,
+            bg_shell_cmd: None,
+        };
+        let sessions = vec![SessionInfo {
+            session_name: "s".into(),
+            windows: vec![WindowInfo {
+                window_id: "@1".into(),
+                window_name: "w".into(),
+                window_active: true,
+                auto_rename: false,
+                panes: vec![pane],
+            }],
+        }];
+        let snapshot = ProcessSnapshot::from_ps_output(&format!("{pid} 1 claude claude\n"));
+
+        let scanned = scan_session_process_snapshot(&sessions, Some(&snapshot)).unwrap();
+
+        assert!(scanned.ports_by_pane.is_empty());
+        assert!(scanned.live_agent_panes.contains("%1"));
+        drop(listener);
     }
 
     #[test]
