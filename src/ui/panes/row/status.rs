@@ -54,13 +54,11 @@ pub(super) fn status_row(
     let badge = pane.permission_mode.badge();
     let elapsed = elapsed_label(pane.started_at, now);
 
-    // Fork-local: a named instance renders bright green like the
-    // agent-picker rows; the plain agent-type label keeps its color.
-    let title_fg = if pane.custom_name.is_empty() && pane.session_name.is_empty() {
-        theme.agent_color(&pane.agent)
-    } else {
-        Color::Indexed(10)
-    };
+    // Fork-local (12. 11. 2026): the title has the colour of the window tab
+    // for the same state, so a working agent reads the same in both places.
+    // ~~a named instance renders bright green, the plain label keeps the
+    // agent colour~~ (3. 9. to 12. 11. 2026).
+    let title_fg = title_color(&pane.status, pane.attention);
     let elapsed_fg = if pane.status.is_active() {
         theme.text_active
     } else {
@@ -152,5 +150,47 @@ pub(super) fn running_icon_for<'a>(
             (icons.status_icon(status), Some(Color::Indexed(color_idx)))
         }
         _ => (icons.status_icon(status), None),
+    }
+}
+
+/// Fork-local (12. 11. 2026): the agent title in the colour its window tab
+/// has for the same state (`window-status-format` in ~/.tmux.conf): working
+/// is bright green (10), waiting for the owner or failed is bright red (9),
+/// everything else is the cyan of an inactive tab (6).
+pub(super) fn title_color(status: &PaneStatus, attention: bool) -> Color {
+    if attention {
+        return Color::Indexed(9);
+    }
+    match status {
+        PaneStatus::Running | PaneStatus::Background => Color::Indexed(10),
+        PaneStatus::Waiting | PaneStatus::Error => Color::Indexed(9),
+        PaneStatus::Idle | PaneStatus::Unknown => Color::Indexed(6),
+    }
+}
+
+#[cfg(test)]
+mod title_color_tests {
+    use super::*;
+
+    #[test]
+    fn working_agent_title_is_green_like_its_tab() {
+        assert_eq!(title_color(&PaneStatus::Running, false), Color::Indexed(10));
+        assert_eq!(
+            title_color(&PaneStatus::Background, false),
+            Color::Indexed(10)
+        );
+    }
+
+    #[test]
+    fn idle_agent_title_is_cyan_like_an_inactive_tab() {
+        assert_eq!(title_color(&PaneStatus::Idle, false), Color::Indexed(6));
+        assert_eq!(title_color(&PaneStatus::Unknown, false), Color::Indexed(6));
+    }
+
+    #[test]
+    fn waiting_or_attention_title_is_red_like_its_tab() {
+        assert_eq!(title_color(&PaneStatus::Waiting, false), Color::Indexed(9));
+        assert_eq!(title_color(&PaneStatus::Idle, true), Color::Indexed(9));
+        assert_eq!(title_color(&PaneStatus::Error, false), Color::Indexed(9));
     }
 }
