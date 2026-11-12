@@ -50,8 +50,8 @@ TUI event loop (app::run) → AppState::sync_global_state()
 
 ### Key Modules
 
-- **`state.rs` + `state/`** — `AppState` central struct plus topical submodules (`activity`, `session`, `focus`, `scroll`, `pane_runtime`, `layout`, `popup`, `notices`, `timers`, `global`, `refresh`, `tab`). All UI is computed from this state.
-- **`app.rs` + `app/`** — TUI orchestration: `setup` (prime `AppState`), `workers` (background git/session/version threads), `input` (keyboard/mouse handling), `render` (per-frame render entry). Split out from `main.rs` so the binary entry point only handles CLI dispatch, signal wiring, and TUI session setup.
+- **`state.rs` + `state/`** — `AppState` central struct plus topical submodules (`activity`, `session`, `focus`, `scroll`, `pane_runtime`, `layout`, `popup`, `timers`, `global`, `refresh`, `tab`). All UI is computed from this state.
+- **`app.rs` + `app/`** — TUI orchestration: `setup` (prime `AppState`), `workers` (background git/session threads), `input` (keyboard/mouse handling), `render` (per-frame render entry). Split out from `main.rs` so the binary entry point only handles CLI dispatch, signal wiring, and TUI session setup.
 - **`tmux.rs`** — Tmux integration: queries all panes via single `list-panes -a` call, defines `PaneInfo`/`PaneStatus`/`AgentType`/`PermissionMode`/`WorktreeMetadata`.
 - **`adapter/`** — Per-agent hook adapters (`claude`, `codex`, `opencode`). Each exposes a `HOOK_REGISTRATIONS` table binding upstream hook triggers to an internal `AgentEventKind`, plus a `parse()` that maps raw JSON payloads into `AgentEvent`. Single source of truth consumed by the setup wizard, README snippets, and tests.
 - **`event.rs` + `event/`** — Internal event layer: `AgentEvent` (pre-extracted fields; handlers never touch raw JSON or agent names), `AgentEventKind` (compile-time enum for hook kinds), `EventAdapter` trait + `resolve_adapter`.
@@ -59,8 +59,8 @@ TUI event loop (app::run) → AppState::sync_global_state()
 - **`git.rs`** — Git operations (branch, ahead/behind, PR numbers via `gh` CLI, diff stats). Runs in a background polling thread.
 - **`activity.rs`** — Parses `/tmp/tmux-agent-activity*.log` files, maps tool types to colors.
 - **`group.rs`** — Groups panes by repository path.
-- **`session.rs` / `worktree.rs` / `tool_name.rs` / `version.rs` / `port.rs` / `clipboard.rs` / `desktop_notification.rs`** — Leaf helpers used across modules (session name resolution, worktree metadata parsing, tool-name classification, version reporting, port detection, clipboard + desktop notification shims).
-- **`ui/`** — Rendering layer: `mod.rs` (entry `draw`), `panes.rs` (agent list) with submodules (`row`, `row_collector`, `click_targets`, `popups`); `bottom.rs` + `bottom/` with submodules (`activity`, `git`) for the activity/git tabs; `colors.rs` (256-color theme); `icons.rs` (agent/status glyphs); `notices.rs` (transient banner rendering); `text.rs` (text formatting/truncation).
+- **`session.rs` / `worktree.rs` / `tool_name.rs` / `port.rs` / `desktop_notification.rs`** — Leaf helpers used across modules (session name resolution, worktree metadata parsing, tool-name classification, pane process snapshot, desktop notification shim).
+- **`ui/`** — Rendering layer: `mod.rs` (entry `draw`), `panes.rs` (agent list) with submodules (`row`, `row_collector`, `click_targets`, `popups`); `bottom.rs` + `bottom/` with submodules (`activity`, `git`) for the activity/git tabs; `colors.rs` (256-color theme); `icons.rs` (agent/status glyphs); `text.rs` (text formatting/truncation).
 
 ### State Management
 

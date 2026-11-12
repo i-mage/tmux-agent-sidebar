@@ -85,11 +85,9 @@ Per-pane file-based state:
 | `git` | Every 2s (bg thread) | Branch, diff stats, ahead/behind, PR number |
 | `bottom_tab` | On user input / auto-switch | Current bottom panel tab |
 | `theme` | Once at startup | Color theme from tmux `@sidebar_color_*` variables |
-| `popup` | On user input / render | `PopupState` enum: `None` / `Repo { selected, area }` / `Notices { area }`. Enforces "at most one popup open" via the type system |
+| `popup` | On user input / render | `PopupState` enum: `None` / `SpawnInput { .. }` / `RemoveConfirm { .. }`. Enforces "at most one popup open" via the type system |
 | `layout` | Every frame (render) | `FrameLayout` sub-struct bundling the ephemeral fields the UI rewrites every frame for click hit-testing: `pane_row_targets`, `line_to_row`, `repo_button_col`, `repo_spawn_targets`, `spawn_remove_targets`, `hyperlink_overlays` |
-| `notices` | Once at startup / on copy | `NoticesState` sub-struct: `button_col`, `missing_hook_groups`, `claude_plugin_status`, `claude_settings_has_residual_hooks`, `claude_plugin_notice`, `copy_targets`, `copied_at` |
 | `timers` | Refresh cycle / on user input | `RefreshTimers` sub-struct gating periodic work: `last_port_refresh`, `port_scan_initialized` |
-| `pending_osc52_copy` | On successful copy / frame flush | OSC 52 clipboard payload queued for terminal forwarding |
 | `pet_state` | Every 200ms (animation) | `Idle` / `WalkRight` / `Working` / `WalkLeft` |
 | `pet_x` | Every 200ms (animation) | Pet X position |
 | `pet_frame` | Every 200ms (animation) | Animation frame counter |
@@ -99,7 +97,6 @@ Per-pane file-based state:
 | `icons` | Once at startup | `StatusIcons` theme (overridable via tmux options) |
 | `tmux_pane` | Once at startup | This sidebar's own tmux pane ID |
 | `pane_states.seen` | Every 1s | Set of pane IDs that have been seen as agents (bundled with `pane_states.map` under the `PaneRuntimeMap` wrapper) |
-| `version_notice` | Once at startup (bg fetch) | GitHub release update notice, `None` when up-to-date |
 | `sessions.names` | Every 10s (background thread) | `session_id → session name` map; scanned by `session_poll_loop` in `app/workers.rs` so the TUI thread never blocks on filesystem I/O |
 | `sessions.dirty` | On session map refresh / application tick | Marks the session map as changed so the per-pane session label walk only runs when needed |
 
@@ -124,9 +121,7 @@ Per-pane file-based state:
 │  sessions.names map populated by session_poll_loop          │
 ├─────────────────────────────────────────────────────────────┤
 │  Once at startup                                             │
-│  theme, bottom_panel_height, notices.claude_plugin_*,       │
-│  notices.claude_settings_has_residual_hooks,                │
-│  notices.claude_plugin_notice, notices.missing_hook_groups  │
+│  theme, bottom_panel_height                                 │
 ├─────────────────────────────────────────────────────────────┤
 │  Every 2s (git background thread)                           │
 │  git (branch, diff, ahead/behind, PR)                       │
@@ -143,8 +138,7 @@ Per-pane file-based state:
 │  immediate selection / active-pane redraw                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Every frame (render)                                       │
-│  layout.line_to_row, popup.area (Notices/SpawnInput/RemoveConfirm),    │
-│  notices.button_col, notices.copy_targets,                  │
+│  layout.line_to_row, popup.area (SpawnInput/RemoveConfirm), │
 │  layout.hyperlink_overlays                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -160,10 +154,6 @@ Agent hooks (hook.sh)
     → handle_event() writes @pane_* tmux options + /tmp activity log files
                         ↓
 TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render})
-  → startup plugin-state reads (cli/plugin_state.rs)
-    → installed_plugins.json / ~/.claude/settings.json
-    → initializes Claude notices state once
-                        ↓
   → refresh() every 1s
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → group_panes_by_repo() (group.rs)
@@ -174,7 +164,6 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render})
     → scan_session_process_snapshot() ← detects dead panes and clears stale tmux metadata
                         ↓
   → git_rx.try_recv()                ← receives GitData from background thread
-  → notices popup render/copy state  ← derived from AppState plugin fields
                         ↓
   → ui::draw() renders frame         ← reads all AppState fields
 ```
@@ -194,8 +183,6 @@ enum PermissionMode { Default, Plan, AcceptEdits, Auto, DontAsk, BypassPermissio
 /// and its per-popup data so the invariant is checked by the type system.
 enum PopupState {
     None,
-    Repo { selected: usize, area: Option<Rect> },
-    Notices { area: Option<Rect> },
     /// Modal text input shown when the user spawns a new worktree.
     SpawnInput {
         input: String,
@@ -299,17 +286,6 @@ struct FrameLayout {
 struct RefreshTimers {
     last_port_refresh: Instant,
     port_scan_initialized: bool,
-}
-
-/// All fields for the ⓘ notices button and its popup.
-struct NoticesState {
-    button_col: Option<u16>,
-    missing_hook_groups: Vec<NoticesMissingHookGroup>,
-    claude_plugin_status: ClaudePluginStatus,
-    claude_settings_has_residual_hooks: bool,
-    claude_plugin_notice: Option<ClaudePluginNotice>,
-    copy_targets: Vec<NoticesCopyTarget>,
-    copied_at: Option<(String, Instant)>,
 }
 ```
 

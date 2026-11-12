@@ -101,18 +101,6 @@ impl AppState {
     /// via line_to_row (adjusted for scroll offset) and activates that pane.
     /// The agent list starts on row 0; there is no header row.
     pub fn handle_mouse_click(&mut self, row: u16, col: u16) {
-        if self.is_notices_popup_open() {
-            if let Some(area) = self.notices_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                if let Some(agent) = self.notices_copy_target_at(row, col).map(str::to_string) {
-                    self.copy_notices_prompt(&agent);
-                }
-                return;
-            }
-            self.close_notices_popup();
-            return;
-        }
         if self.is_spawn_input_open() {
             if let Some(area) = self.spawn_input_popup_area()
                 && point_in_rect(row, col, area)

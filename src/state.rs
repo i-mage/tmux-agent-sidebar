@@ -7,7 +7,6 @@ mod activity;
 mod focus;
 mod global;
 mod layout;
-mod notices;
 mod pane_runtime;
 mod pet;
 mod popup;
@@ -21,8 +20,6 @@ pub use activity::ActivityState;
 pub use focus::{Focus, FocusState};
 pub use global::GlobalState;
 pub use layout::{FrameLayout, HyperlinkOverlay, RepoSpawnTarget, RowTarget, SpawnRemoveTarget};
-pub(crate) use notices::debug_forced_display;
-pub use notices::{ClaudePluginNotice, NoticesCopyTarget, NoticesMissingHookGroup, NoticesState};
 pub use pane_runtime::{PaneRuntimeMap, PaneRuntimeState};
 pub use popup::{PopupState, SpawnField};
 #[cfg(test)]
@@ -62,21 +59,11 @@ pub struct AppState {
     pub bottom_tab: BottomTab,
     pub git: crate::git::GitData,
     pub pane_states: PaneRuntimeMap,
-    /// Periodic-refresh clocks (port scan, session-name scan, filter
-    /// debounce, port-scan first-run flag).
+    /// Periodic-refresh clocks (port scan, port-scan first-run flag).
     pub timers: RefreshTimers,
     /// Current popup state. At most one popup is open at a time; the enum
     /// variant encodes both which popup is open and its per-popup data.
     pub popup: PopupState,
-    /// All fields related to the ⓘ notices button and its popup — the button
-    /// click region, cached hook/plugin diagnostics, per-agent copy targets,
-    /// and the transient "copied" feedback label.
-    pub notices: NoticesState,
-    /// Pending OSC 52 clipboard payload. The main loop flushes this to
-    /// stdout after the next frame so tmux (with `set-clipboard on`) can
-    /// forward it to the upstream terminal's clipboard — covering the
-    /// SSH case where `arboard` would only reach the remote machine.
-    pub pending_osc52_copy: Option<String>,
     pub pet_state: crate::ui::pet::PetState,
     /// Pet animation X position (character offset from left of bottom panel).
     pub pet_x: u16,
@@ -113,8 +100,6 @@ pub struct AppState {
     pub pet_working_paper_x_offset: u16,
     /// Seed used to reshuffle working paper motion timing.
     pub pet_working_paper_seed: usize,
-    /// Update notice shown when a newer GitHub release is available.
-    pub version_notice: Option<crate::version::UpdateNotice>,
     /// Shared state across sidebar instances, persisted to tmux global variables.
     pub global: GlobalState,
     /// Height of the bottom panel in lines. Loaded once at startup from
@@ -160,8 +145,6 @@ impl AppState {
             pane_states: PaneRuntimeMap::new(),
             timers: RefreshTimers::default(),
             popup: PopupState::None,
-            notices: NoticesState::default(),
-            pending_osc52_copy: None,
             pet_state: crate::ui::pet::PetState::Idle,
             pet_x: crate::ui::pet::PET_HOME_X,
             pet_frame: 0,
@@ -181,7 +164,6 @@ impl AppState {
             pet_working_paper_lift_until: 0,
             pet_working_paper_x_offset: 0,
             pet_working_paper_seed: 1,
-            version_notice: None,
             global: GlobalState::new(),
             bottom_panel_height: crate::ui::BOTTOM_PANEL_HEIGHT,
             show_branch: true,

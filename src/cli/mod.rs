@@ -1,7 +1,6 @@
 pub mod capture;
 mod hook;
 mod label;
-pub mod plugin_state;
 pub(crate) mod setup;
 pub(crate) mod shared_html;
 mod spawn;

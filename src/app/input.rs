@@ -61,12 +61,6 @@ pub(super) fn handle_key_event(
     state: &mut AppState,
     git_tab_active: &AtomicBool,
 ) -> bool {
-    if state.is_notices_popup_open() {
-        if key.code == KeyCode::Esc {
-            state.close_notices_popup();
-        }
-        return true;
-    }
     if state.is_spawn_input_open() {
         match key.code {
             KeyCode::Esc => state.close_spawn_input(),

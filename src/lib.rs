@@ -2,7 +2,6 @@ pub mod activity;
 pub mod adapter;
 pub mod app;
 pub mod cli;
-pub mod clipboard;
 pub mod desktop_notification;
 pub mod event;
 pub mod git;
@@ -16,7 +15,6 @@ pub mod time;
 pub mod tmux;
 pub mod tool_name;
 pub mod ui;
-pub mod version;
 pub mod worktree;
 
 pub const SPINNER_ICON: &str = "●";

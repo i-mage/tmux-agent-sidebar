@@ -375,9 +375,7 @@ pub(crate) fn resolve_hook_script() -> ResolvedHookScript {
 /// at each ancestor directory, stopping at the first non-`None` result
 /// or after `max_depth` steps. Returns `None` when the executable path
 /// cannot be resolved (e.g. exotic platforms) — callers must be prepared
-/// to fall back gracefully. Used by `resolve_hook_script` and by
-/// `notices::plugin_root_from_exe` so the upward-walk loop lives in one
-/// place.
+/// to fall back gracefully. Used by `resolve_hook_script`.
 pub(crate) fn walk_up_from_exe<F, T>(max_depth: usize, mut probe: F) -> Option<T>
 where
     F: FnMut(&std::path::Path) -> Option<T>,

@@ -39,35 +39,6 @@ fn snapshot_single_agent_idle_ui() {
 }
 
 #[test]
-fn snapshot_version_banner_does_not_duplicate_in_scroll_area() {
-    let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
-    let mut state = make_state(vec![SessionInfo {
-        session_name: "main".into(),
-        windows: vec![WindowInfo {
-            window_id: "@1".into(),
-            window_name: "project".into(),
-            window_active: true,
-            auto_rename: false,
-            panes: vec![pane.clone()],
-        }],
-    }]);
-    state.repo_groups = vec![make_repo_group("project", vec![pane])];
-    state.version_notice = Some(tmux_agent_sidebar::version::UpdateNotice {
-        local_version: "0.2.6".into(),
-        latest_version: "0.2.7".into(),
-    });
-    state.bottom_panel_height = 0;
-    state.rebuild_row_targets();
-
-    let output = render_to_string(&mut state, 28, 10);
-    insta::assert_snapshot!(output, @"
-    project
-    ┃○ claude
-    ┃  Waiting for prompt…
-    ");
-}
-
-#[test]
 fn snapshot_single_agent_running_with_elapsed() {
     let mut pane = make_pane(AgentType::Claude, PaneStatus::Running);
     pane.started_at = Some(FIXED_NOW - 125); // 2m5s ago

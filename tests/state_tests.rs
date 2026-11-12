@@ -195,33 +195,6 @@ fn test_line_to_row_with_prompt() {
     assert_eq!(state.layout.line_to_row[2], Some(0)); // prompt line
 }
 
-#[test]
-fn test_line_to_row_with_version_banner() {
-    let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
-    let mut state = make_state(vec![SessionInfo {
-        session_name: "main".into(),
-        windows: vec![WindowInfo {
-            window_id: "@1".into(),
-            window_name: "project".into(),
-            window_active: true,
-            auto_rename: false,
-            panes: vec![pane.clone()],
-        }],
-    }]);
-    state.repo_groups = vec![make_repo_group("project", vec![pane])];
-    state.version_notice = Some(tmux_agent_sidebar::version::UpdateNotice {
-        local_version: "0.2.6".into(),
-        latest_version: "0.2.7".into(),
-    });
-    state.rebuild_row_targets();
-    let _ = render_to_string(&mut state, 28, 10);
-    // version banner should still stay out of the scrollable list
-    assert_eq!(state.layout.line_to_row.len(), 3);
-    assert_eq!(state.layout.line_to_row[0], None); // repo header
-    assert_eq!(state.layout.line_to_row[1], Some(0)); // agent status line
-    assert_eq!(state.layout.line_to_row[2], Some(0)); // idle hint
-}
-
 // ─── Coverage Gap Tests ─────────────────────────────────────────────
 
 #[test]
