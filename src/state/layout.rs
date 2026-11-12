@@ -1,4 +1,4 @@
-use super::{AppState, RepoFilter, StatusFilter};
+use super::AppState;
 
 #[derive(Debug, Clone)]
 pub struct RowTarget {
@@ -49,13 +49,6 @@ pub struct FrameLayout {
     /// `pane_row_targets`. `None` for header/blank lines that should not
     /// route clicks to a pane.
     pub line_to_row: Vec<Option<usize>>,
-    /// X column of the repo filter button in the secondary header. `None`
-    /// when the button is hidden. Used for click hit-testing.
-    pub repo_button_col: Option<u16>,
-    /// Fork-local: first screen column right of the status counts on the
-    /// header row; from here on a click belongs to the notices button and
-    /// the repo selector, not to a status filter.
-    pub header_split_col: Option<u16>,
     /// Click regions for the `[+]` spawn button rendered at the right
     /// edge of each repo-group header. One entry per visible repo group.
     pub repo_spawn_targets: Vec<RepoSpawnTarget>,
@@ -73,27 +66,12 @@ pub(super) fn point_in_rect(row: u16, col: u16, rect: ratatui::layout::Rect) -> 
 
 impl AppState {
     pub fn rebuild_row_targets(&mut self) {
-        // Reset stale repo filter if the repo no longer exists, and
-        // persist the reset back to tmux so fresh sidebar instances do
-        // not reload the dead repo name on startup.
-        if let RepoFilter::Repo(ref name) = self.global.repo_filter
-            && !self.repo_groups.iter().any(|g| g.name == *name)
-        {
-            self.global.repo_filter = RepoFilter::All;
-            self.global.save_repo_filter();
-        }
-
         self.layout.pane_row_targets.clear();
         for group in &self.repo_groups {
-            if !self.global.repo_filter.matches_group(&group.name) {
-                continue;
-            }
             for (pane, _) in &group.panes {
-                if self.global.status_filter.matches(&pane.status) {
-                    self.layout.pane_row_targets.push(RowTarget {
-                        pane_id: pane.pane_id.clone(),
-                    });
-                }
+                self.layout.pane_row_targets.push(RowTarget {
+                    pane_id: pane.pane_id.clone(),
+                });
             }
         }
         if self.global.selected_pane_row >= self.layout.pane_row_targets.len()
@@ -119,73 +97,9 @@ impl AppState {
         }
     }
 
-    /// Handle mouse click on the filter bar (row 0).
-    /// Determines which filter was clicked based on x coordinate.
-    /// Debounces rapid clicks to ignore phantom mouse events from tmux
-    /// pane resize/layout changes.
-    pub fn handle_filter_click(&mut self, col: u16) {
-        const DEBOUNCE_MS: u128 = 150;
-        let now = std::time::Instant::now();
-        if now
-            .duration_since(self.timers.last_filter_click)
-            .as_millis()
-            < DEBOUNCE_MS
-        {
-            return;
-        }
-        self.timers.last_filter_click = now;
-
-        let (all, running, background, waiting, idle, error) = self.status_counts();
-        // Layout: " ∑N  ●N  ◎N  ◐N  ○N  ✕N"
-        // Each filter item renders as `icon(1) + count`, so the clickable
-        // width is `1 + digits(count)`.
-        let mut x = 1usize; // leading space
-        let items: Vec<(StatusFilter, usize)> = vec![
-            (StatusFilter::All, 1 + format!("{all}").len()),
-            (StatusFilter::Running, 1 + format!("{running}").len()),
-            (StatusFilter::Background, 1 + format!("{background}").len()),
-            (StatusFilter::Waiting, 1 + format!("{waiting}").len()),
-            (StatusFilter::Idle, 1 + format!("{idle}").len()),
-            (StatusFilter::Error, 1 + format!("{error}").len()),
-        ];
-        let col = col as usize;
-        for (i, (filter, width)) in items.iter().enumerate() {
-            if i > 0 {
-                x += 2; // "  " separator
-            }
-            if col >= x && col < x + width {
-                self.global.status_filter = *filter;
-                self.global.save_filter("click-header");
-                self.rebuild_row_targets();
-                return;
-            }
-            x += width;
-        }
-    }
-
-    /// Handle mouse click on the right part of the header row (row 0):
-    /// the notices button and, on the far right, the repo filter button.
-    pub fn handle_secondary_header_click(&mut self, col: u16) {
-        if self
-            .notices
-            .button_col
-            .is_some_and(|notices_col| col == notices_col)
-        {
-            self.toggle_notices_popup();
-            return;
-        }
-        if self
-            .layout
-            .repo_button_col
-            .is_some_and(|repo_button_col| col >= repo_button_col)
-        {
-            self.toggle_repo_popup();
-        }
-    }
-
     /// Handle mouse click in agents panel. Maps screen row to agent row
     /// via line_to_row (adjusted for scroll offset) and activates that pane.
-    /// Row 0 is the fixed filter bar, row 1+ maps to the scrollable agent list.
+    /// The agent list starts on row 0; there is no header row.
     pub fn handle_mouse_click(&mut self, row: u16, col: u16) {
         if self.is_notices_popup_open() {
             if let Some(area) = self.notices_popup_area()
@@ -197,27 +111,6 @@ impl AppState {
                 return;
             }
             self.close_notices_popup();
-            return;
-        }
-        if self.is_repo_popup_open() {
-            if let Some(area) = self.repo_popup_area()
-                && point_in_rect(row, col, area)
-            {
-                // Skip clicks on the popup chrome (top border / title row).
-                // Without this guard `saturating_sub(1)` collapses a click on
-                // the title row into `item_index == 0`, switching the filter
-                // to the first repo the moment the user reaches for the
-                // popup.
-                if row > area.y {
-                    let item_index = (row - area.y - 1) as usize;
-                    if item_index < self.repo_names().len() {
-                        self.set_repo_popup_selected(item_index);
-                        self.confirm_repo_popup();
-                    }
-                }
-                return;
-            }
-            self.close_repo_popup();
             return;
         }
         if self.is_spawn_input_open() {
@@ -236,19 +129,6 @@ impl AppState {
                 return;
             }
             self.close_remove_confirm();
-            return;
-        }
-
-        if row == 0 {
-            if self
-                .layout
-                .header_split_col
-                .is_some_and(|split| col >= split)
-            {
-                self.handle_secondary_header_click(col);
-            } else {
-                self.handle_filter_click(col);
-            }
             return;
         }
 
@@ -277,7 +157,7 @@ impl AppState {
             return;
         }
 
-        let line_index = (row as usize - 1) + self.scrolls.panes.offset;
+        let line_index = row as usize + self.scrolls.panes.offset;
         if let Some(Some(agent_row)) = self.layout.line_to_row.get(line_index) {
             self.global.selected_pane_row = *agent_row;
             self.global.queue_cursor_save();

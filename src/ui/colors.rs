@@ -13,13 +13,11 @@ pub struct ColorTheme {
     /// popup border.
     pub accent: Color,
     pub border_inactive: Color,
-    pub status_all: Color,
     pub status_running: Color,
     pub status_waiting: Color,
     pub status_idle: Color,
     pub status_error: Color,
     pub status_unknown: Color,
-    pub filter_inactive: Color,
     pub agent_claude: Color,
     pub agent_codex: Color,
     pub agent_opencode: Color,
@@ -64,13 +62,11 @@ impl Default for ColorTheme {
         Self {
             accent: Color::Indexed(153),
             border_inactive: Color::Indexed(240),
-            status_all: Color::Indexed(111),
             status_running: Color::Indexed(114),
             status_waiting: Color::Indexed(221),
             status_idle: Color::Indexed(110),
             status_error: Color::Indexed(167),
             status_unknown: Color::Indexed(244),
-            filter_inactive: Color::Indexed(245),
             agent_claude: Color::Indexed(174),
             agent_codex: Color::Indexed(141),
             agent_opencode: Color::Indexed(117),
@@ -126,12 +122,10 @@ impl ColorTheme {
 
         theme.accent = read(tmux::SIDEBAR_COLOR_ACCENT, theme.accent);
         theme.border_inactive = read(tmux::SIDEBAR_COLOR_BORDER, theme.border_inactive);
-        theme.status_all = read(tmux::SIDEBAR_COLOR_ALL, theme.status_all);
         theme.status_running = read(tmux::SIDEBAR_COLOR_RUNNING, theme.status_running);
         theme.status_waiting = read(tmux::SIDEBAR_COLOR_WAITING, theme.status_waiting);
         theme.status_idle = read(tmux::SIDEBAR_COLOR_IDLE, theme.status_idle);
         theme.status_error = read(tmux::SIDEBAR_COLOR_ERROR, theme.status_error);
-        theme.filter_inactive = read(tmux::SIDEBAR_COLOR_FILTER_INACTIVE, theme.filter_inactive);
         theme.agent_claude = read(tmux::SIDEBAR_COLOR_AGENT_CLAUDE, theme.agent_claude);
         theme.agent_codex = read(tmux::SIDEBAR_COLOR_AGENT_CODEX, theme.agent_codex);
         theme.agent_opencode = read(tmux::SIDEBAR_COLOR_AGENT_OPENCODE, theme.agent_opencode);

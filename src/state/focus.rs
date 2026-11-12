@@ -3,7 +3,6 @@ use crate::tmux;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Focus {
-    Filter,
     #[default]
     Panes,
     ActivityLog,

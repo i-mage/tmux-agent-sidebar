@@ -92,25 +92,10 @@ pub(super) fn handle_key_event(
         }
         return true;
     }
-    if state.is_repo_popup_open() {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match key.code {
-            KeyCode::Esc => state.close_repo_popup(),
-            KeyCode::Char('j') | KeyCode::Down => repo_popup_nav_down(state),
-            KeyCode::Char('n') if ctrl => repo_popup_nav_down(state),
-            KeyCode::Char('k') | KeyCode::Up => repo_popup_nav_up(state),
-            KeyCode::Char('p') if ctrl => repo_popup_nav_up(state),
-            KeyCode::Enter => state.confirm_repo_popup(),
-            _ => {}
-        }
-        return true;
-    }
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     match key.code {
         KeyCode::Esc => {
-            if state.focus_state.focus == Focus::ActivityLog
-                || state.focus_state.focus == Focus::Filter
-            {
+            if state.focus_state.focus == Focus::ActivityLog {
                 state.focus_state.focus = Focus::Panes;
             }
         }
@@ -118,25 +103,6 @@ pub(super) fn handle_key_event(
         KeyCode::Char('n') if ctrl => pane_nav_down(state),
         KeyCode::Char('k') | KeyCode::Up => pane_nav_up(state),
         KeyCode::Char('p') if ctrl => pane_nav_up(state),
-        KeyCode::Char('h') | KeyCode::Left => {
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.prev();
-                state.global.save_filter("key-left");
-                state.rebuild_row_targets();
-            }
-        }
-        KeyCode::Char('l') | KeyCode::Right => {
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.next();
-                state.global.save_filter("key-right");
-                state.rebuild_row_targets();
-            }
-        }
-        KeyCode::Char('r') => {
-            if state.focus_state.focus == Focus::Filter {
-                state.toggle_repo_popup();
-            }
-        }
         KeyCode::Char('n') => {
             if state.focus_state.focus == Focus::Panes {
                 state.open_spawn_input_from_selection();
@@ -152,17 +118,6 @@ pub(super) fn handle_key_event(
                 state.activate_selected_pane();
             }
         }
-        // Fork-local: Tab cycles the filter only while the filter row has
-        // focus. Unguarded, a Tab typed into a focused sidebar (meant for the
-        // agent next to it) switched every sidebar to `running` and emptied
-        // the list as soon as no agent was running.
-        KeyCode::Tab => {
-            if state.focus_state.focus == Focus::Filter {
-                state.global.status_filter = state.global.status_filter.next();
-                state.global.save_filter("key-tab");
-                state.rebuild_row_targets();
-            }
-        }
         KeyCode::BackTab => {
             state.next_bottom_tab();
             git_tab_active.store(state.bottom_tab == BottomTab::GitStatus, Ordering::Relaxed);
@@ -174,9 +129,6 @@ pub(super) fn handle_key_event(
 
 fn pane_nav_down(state: &mut AppState) {
     match state.focus_state.focus {
-        Focus::Filter => {
-            state.focus_state.focus = Focus::Panes;
-        }
         Focus::Panes => {
             if state.move_pane_selection(1) {
                 state.global.queue_cursor_save();
@@ -190,12 +142,9 @@ fn pane_nav_down(state: &mut AppState) {
 
 fn pane_nav_up(state: &mut AppState) {
     match state.focus_state.focus {
-        Focus::Filter => {}
         Focus::Panes => {
             if state.move_pane_selection(-1) {
                 state.global.queue_cursor_save();
-            } else {
-                state.focus_state.focus = Focus::Filter;
             }
         }
         Focus::ActivityLog => {
@@ -212,25 +161,9 @@ fn pane_nav_up(state: &mut AppState) {
     }
 }
 
-fn repo_popup_nav_down(state: &mut AppState) {
-    let count = state.repo_names().len();
-    let current = state.repo_popup_selected();
-    if current + 1 < count {
-        state.set_repo_popup_selected(current + 1);
-    }
-}
-
-fn repo_popup_nav_up(state: &mut AppState) {
-    let current = state.repo_popup_selected();
-    if current > 0 {
-        state.set_repo_popup_selected(current - 1);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::group::RepoGroup;
     use crate::state::RowTarget;
 
     fn key(code: KeyCode) -> KeyEvent {
@@ -258,28 +191,6 @@ mod tests {
         ];
         state.global.selected_pane_row = 0;
         state.focus_state.focus = Focus::Panes;
-        state
-    }
-
-    fn state_with_repo_popup_open() -> AppState {
-        let mut state = AppState::new("%99".into());
-        // toggle_repo_popup uses repo_names(), which always includes the
-        // "All" sentinel — pad with two named groups so the selection has
-        // somewhere to move.
-        state.repo_groups = vec![
-            RepoGroup {
-                name: "repo-a".into(),
-                has_focus: false,
-                panes: vec![],
-            },
-            RepoGroup {
-                name: "repo-b".into(),
-                has_focus: false,
-                panes: vec![],
-            },
-        ];
-        state.toggle_repo_popup();
-        state.set_repo_popup_selected(0);
         state
     }
 
@@ -333,32 +244,5 @@ mod tests {
         let flag = AtomicBool::new(false);
         handle_key_event(key(KeyCode::Char('p')), &mut state, &flag);
         assert_eq!(state.global.selected_pane_row, 1);
-    }
-
-    #[test]
-    fn ctrl_n_navigates_repo_popup_down() {
-        let mut state = state_with_repo_popup_open();
-        let flag = AtomicBool::new(false);
-        handle_key_event(ctrl_key('n'), &mut state, &flag);
-        assert_eq!(state.repo_popup_selected(), 1);
-        handle_key_event(ctrl_key('n'), &mut state, &flag);
-        assert_eq!(state.repo_popup_selected(), 2);
-        // Past the last entry the popup nav helper is a no-op.
-        handle_key_event(ctrl_key('n'), &mut state, &flag);
-        assert_eq!(state.repo_popup_selected(), 2);
-    }
-
-    #[test]
-    fn ctrl_p_navigates_repo_popup_up() {
-        let mut state = state_with_repo_popup_open();
-        state.set_repo_popup_selected(2);
-        let flag = AtomicBool::new(false);
-        handle_key_event(ctrl_key('p'), &mut state, &flag);
-        assert_eq!(state.repo_popup_selected(), 1);
-        handle_key_event(ctrl_key('p'), &mut state, &flag);
-        assert_eq!(state.repo_popup_selected(), 0);
-        // Below 0 the popup nav helper is a no-op.
-        handle_key_event(ctrl_key('p'), &mut state, &flag);
-        assert_eq!(state.repo_popup_selected(), 0);
     }
 }

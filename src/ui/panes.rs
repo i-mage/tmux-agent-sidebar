@@ -1,5 +1,4 @@
 mod click_targets;
-mod filter_bar;
 mod popups;
 mod row;
 mod row_collector;
@@ -12,7 +11,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-use crate::state::{AppState, Focus, PopupState, RepoFilter, SpawnField};
+use crate::state::{AppState, Focus, PopupState, SpawnField};
 
 pub(super) const SPAWN_BUTTON: &str = "+";
 
@@ -47,38 +46,6 @@ fn anchor_below(area: Rect, anchor_y: u16, desired_width: u16, desired_height: u
         bottom.saturating_sub(height).max(area.y)
     };
     Rect::new(area.x, y, width, height)
-}
-
-struct PaneLayout {
-    filter_area: Rect,
-    secondary_area: Rect,
-    list_area: Rect,
-}
-
-impl PaneLayout {
-    fn compute(area: Rect) -> Self {
-        let filter_area = Rect {
-            x: area.x,
-            y: area.y,
-            width: area.width,
-            height: 1.min(area.height),
-        };
-        // Fork-local (owner, 10. 11. 2026): the repo selector shares the
-        // filter row, so the agent list starts one row higher. The draw
-        // code narrows this rect to the columns right of the counts.
-        let secondary_area = filter_area;
-        let list_area = Rect {
-            x: area.x,
-            y: area.y + 1,
-            width: area.width,
-            height: area.height.saturating_sub(1),
-        };
-        Self {
-            filter_area,
-            secondary_area,
-            list_area,
-        }
-    }
 }
 
 /// Minimum agents-panel height the expanded Vercel-style spawn modal
@@ -343,104 +310,6 @@ pub(super) fn render_remove_confirm_popup(frame: &mut Frame, state: &mut AppStat
     }
 }
 
-pub(super) fn render_repo_popup(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    let theme = &state.theme;
-    let repos = state.repo_names();
-    if repos.is_empty() {
-        return;
-    }
-
-    let max_name_len = repos.iter().map(|r| display_width(r)).max().unwrap_or(3);
-    // Width: padding(1 left + 1 right) + name + borders(2)
-    let popup_width = (max_name_len + 4).min(area.width as usize).max(10) as u16;
-    let popup_height = (repos.len() as u16 + 2).min(area.height.saturating_sub(2)); // +2 for borders
-
-    // Right-aligned, below the one-row header
-    let popup_x = area.x + area.width.saturating_sub(popup_width);
-    let popup_y = area.y + 1;
-
-    let popup_rect = Rect::new(popup_x, popup_y, popup_width, popup_height);
-    state.popup.set_repo_area(Some(popup_rect));
-
-    frame.render_widget(Clear, popup_rect);
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.accent));
-    let inner = block.inner(popup_rect);
-    frame.render_widget(block, popup_rect);
-
-    let inner_width = inner.width as usize;
-    for (i, name) in repos.iter().enumerate() {
-        if i >= inner.height as usize {
-            break;
-        }
-
-        let is_highlighted = i == state.repo_popup_selected();
-        let is_current = match &state.global.repo_filter {
-            RepoFilter::All => i == 0,
-            RepoFilter::Repo(n) => *n == *name,
-        };
-
-        let truncated = truncate_to_width(name, inner_width.saturating_sub(1));
-        let text = format!(" {}", truncated);
-        let text_dw = display_width(&text);
-        let padding = " ".repeat(inner_width.saturating_sub(text_dw));
-
-        let style = if is_highlighted {
-            Style::default()
-                .fg(theme.text_active)
-                .bg(theme.selection_bg)
-        } else if is_current {
-            Style::default().fg(theme.text_active)
-        } else {
-            Style::default().fg(theme.text_muted)
-        };
-
-        let line_rect = Rect::new(inner.x, inner.y + i as u16, inner.width, 1);
-        frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                format!("{}{}", text, padding),
-                style,
-            ))),
-            line_rect,
-        );
-    }
-}
-
-/// Draws the status counts and returns how many columns they took.
-fn render_filter_bar_into(frame: &mut Frame, state: &AppState, area: Rect) -> u16 {
-    let line = filter_bar::render_filter_bar(state);
-    let used = line.width().min(area.width as usize) as u16;
-    frame.render_widget(Paragraph::new(vec![line]), area);
-    used
-}
-
-/// Draws the notices button and the repo selector on the filter row, in
-/// the columns right of the counts (`used`). The button columns are stored
-/// as screen columns, and `header_split_col` tells the click handler where
-/// the counts end.
-fn render_secondary_header_into(frame: &mut Frame, state: &mut AppState, area: Rect, used: u16) {
-    let free = Rect {
-        x: area.x + used,
-        y: area.y,
-        width: area.width.saturating_sub(used),
-        height: area.height,
-    };
-    if free.width == 0 || free.height == 0 {
-        state.notices.button_col = None;
-        state.layout.repo_button_col = None;
-        state.layout.header_split_col = None;
-        return;
-    }
-    let (line, notices_btn_col, repo_btn_col) =
-        filter_bar::render_secondary_header(state, free.width);
-    state.notices.button_col = notices_btn_col.map(|c| c + used);
-    state.layout.repo_button_col = repo_btn_col.map(|c| c + used);
-    state.layout.header_split_col = Some(used);
-    frame.render_widget(Paragraph::new(vec![line]), free);
-}
-
 fn compute_scroll_offset(state: &mut AppState, total_lines: usize, list_area: Rect) -> usize {
     state.scrolls.panes.total_lines = total_lines;
     state.scrolls.panes.visible_height = list_area.height as usize;
@@ -502,100 +371,26 @@ fn render_flash_banner_into(frame: &mut Frame, state: &mut AppState, area: Rect)
 }
 
 pub fn draw_agents(frame: &mut Frame, state: &mut AppState, area: Rect) {
-    let layout = PaneLayout::compute(area);
-    let used = render_filter_bar_into(frame, state, layout.filter_area);
-    render_secondary_header_into(frame, state, layout.secondary_area, used);
-
+    // Fork-local (owner, 12. 11. 2026): no header row; the agent list
+    // takes the whole area.
+    let list_area = area;
     let row_collector::CollectedRows {
         lines,
         line_to_row,
         pending_spawn,
         pending_remove,
-    } = row_collector::collect(state, layout.list_area.width);
+    } = row_collector::collect(state, list_area.width);
     state.layout.line_to_row = line_to_row;
-    let scroll_offset = compute_scroll_offset(state, lines.len(), layout.list_area);
+    let scroll_offset = compute_scroll_offset(state, lines.len(), list_area);
     click_targets::materialize(
         state,
         pending_spawn,
         pending_remove,
         scroll_offset,
-        layout.list_area,
+        list_area,
     );
-    render_pane_rows(frame, lines, scroll_offset, layout.list_area);
+    render_pane_rows(frame, lines, scroll_offset, list_area);
 
     render_flash_banner_into(frame, state, area);
     popups::render_if_open(frame, state, area);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pane_layout_splits_area_into_filter_secondary_list() {
-        let area = Rect {
-            x: 0,
-            y: 0,
-            width: 40,
-            height: 20,
-        };
-        let layout = PaneLayout::compute(area);
-        assert_eq!(layout.filter_area.x, 0);
-        assert_eq!(layout.filter_area.y, 0);
-        assert_eq!(layout.filter_area.width, 40);
-        assert_eq!(layout.filter_area.height, 1);
-        // Fork-local: the repo selector shares the filter row, the list starts on row 1.
-        assert_eq!(layout.secondary_area.y, 0);
-        assert_eq!(layout.secondary_area.height, 1);
-        assert_eq!(layout.list_area.y, 1);
-        assert_eq!(layout.list_area.height, 19);
-        assert_eq!(layout.list_area.width, 40);
-    }
-
-    #[test]
-    fn pane_layout_handles_tiny_area() {
-        // Only 1 row available: the header (counts and repo selector) gets it, the list collapses to 0.
-        let area = Rect {
-            x: 0,
-            y: 0,
-            width: 40,
-            height: 1,
-        };
-        let layout = PaneLayout::compute(area);
-        assert_eq!(layout.filter_area.height, 1);
-        assert_eq!(layout.secondary_area.height, 1);
-        assert_eq!(layout.list_area.height, 0);
-    }
-
-    #[test]
-    fn pane_layout_handles_zero_height() {
-        let area = Rect {
-            x: 0,
-            y: 0,
-            width: 40,
-            height: 0,
-        };
-        let layout = PaneLayout::compute(area);
-        assert_eq!(layout.filter_area.height, 0);
-        assert_eq!(layout.secondary_area.height, 0);
-        assert_eq!(layout.list_area.height, 0);
-    }
-
-    #[test]
-    fn pane_layout_respects_non_zero_origin() {
-        let area = Rect {
-            x: 5,
-            y: 10,
-            width: 30,
-            height: 15,
-        };
-        let layout = PaneLayout::compute(area);
-        assert_eq!(layout.filter_area.x, 5);
-        assert_eq!(layout.filter_area.y, 10);
-        assert_eq!(layout.secondary_area.x, 5);
-        assert_eq!(layout.secondary_area.y, 10);
-        assert_eq!(layout.list_area.x, 5);
-        assert_eq!(layout.list_area.y, 11);
-        assert_eq!(layout.list_area.height, 14);
-    }
 }

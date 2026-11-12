@@ -21,20 +21,11 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
     let theme = &state.theme;
 
     let mut collected = CollectedRows::default();
-    let filter = state.global.status_filter;
     let mut first_group = true;
     let mut row_index: usize = 0;
 
     for group in &state.repo_groups {
-        if !state.global.repo_filter.matches_group(&group.name) {
-            continue;
-        }
-        let filtered_panes: Vec<_> = group
-            .panes
-            .iter()
-            .filter(|(pane, _)| filter.matches(&pane.status))
-            .collect();
-        if filtered_panes.is_empty() {
+        if group.panes.is_empty() {
             continue;
         }
 
@@ -93,7 +84,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
         collected.lines.push(Line::from(spans));
         collected.line_to_row.push(None);
 
-        for (pane, git_info) in filtered_panes.iter() {
+        for (pane, git_info) in group.panes.iter() {
             let is_selected = state.focus_state.sidebar_focused
                 && state.focus_state.focus == Focus::Panes
                 && row_index == state.global.selected_pane_row;
@@ -157,7 +148,7 @@ pub(super) fn collect(state: &AppState, width: u16) -> CollectedRows {
 mod tests {
     use super::*;
     use crate::group::{PaneGitInfo, RepoGroup};
-    use crate::state::{AppState, StatusFilter};
+    use crate::state::AppState;
     use crate::tmux::{AgentType, PaneInfo, PaneStatus, PermissionMode, WorktreeMetadata};
 
     fn make_pane(id: &str, status: PaneStatus) -> PaneInfo {
@@ -196,21 +187,6 @@ mod tests {
         assert!(collected.line_to_row.is_empty());
         assert!(collected.pending_spawn.is_empty());
         assert!(collected.pending_remove.is_empty());
-    }
-
-    #[test]
-    fn collect_skips_group_when_status_filter_excludes_all_panes() {
-        let mut state = AppState::new("%0".into());
-        // The group has only Running panes, so filter to Waiting to drop them all.
-        state.global.status_filter = StatusFilter::Waiting;
-        state.repo_groups = vec![RepoGroup {
-            name: "repo".into(),
-            has_focus: false,
-            panes: vec![(make_pane("%1", PaneStatus::Running), PaneGitInfo::default())],
-        }];
-        let collected = collect(&state, 40);
-        assert!(collected.lines.is_empty());
-        assert!(collected.pending_spawn.is_empty());
     }
 
     #[test]

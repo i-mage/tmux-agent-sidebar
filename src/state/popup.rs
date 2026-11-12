@@ -35,10 +35,6 @@ impl SpawnField {
 pub enum PopupState {
     #[default]
     None,
-    Repo {
-        selected: usize,
-        area: Option<ratatui::layout::Rect>,
-    },
     Notices {
         area: Option<ratatui::layout::Rect>,
     },
@@ -76,12 +72,6 @@ pub enum PopupState {
 }
 
 impl PopupState {
-    pub fn set_repo_area(&mut self, rect: Option<ratatui::layout::Rect>) {
-        if let Self::Repo { area, .. } = self {
-            *area = rect;
-        }
-    }
-
     pub fn set_notices_area(&mut self, rect: Option<ratatui::layout::Rect>) {
         if let Self::Notices { area } = self {
             *area = rect;
@@ -102,70 +92,6 @@ impl PopupState {
 }
 
 impl AppState {
-    // ─── Repo popup ──────────────────────────────────────────────────────
-
-    pub fn is_repo_popup_open(&self) -> bool {
-        matches!(self.popup, PopupState::Repo { .. })
-    }
-
-    pub fn repo_popup_selected(&self) -> usize {
-        match &self.popup {
-            PopupState::Repo { selected, .. } => *selected,
-            _ => 0,
-        }
-    }
-
-    pub fn set_repo_popup_selected(&mut self, n: usize) {
-        if let PopupState::Repo { selected, .. } = &mut self.popup {
-            *selected = n;
-        }
-    }
-
-    pub fn repo_popup_area(&self) -> Option<ratatui::layout::Rect> {
-        match &self.popup {
-            PopupState::Repo { area, .. } => *area,
-            _ => None,
-        }
-    }
-
-    pub fn toggle_repo_popup(&mut self) {
-        if self.is_repo_popup_open() {
-            self.close_repo_popup();
-            return;
-        }
-        // Set selected to current filter position
-        let names = self.repo_names();
-        let selected = match &self.global.repo_filter {
-            super::RepoFilter::All => 0,
-            super::RepoFilter::Repo(name) => names.iter().position(|n| n == name).unwrap_or(0),
-        };
-        self.popup = PopupState::Repo {
-            selected,
-            area: None,
-        };
-    }
-
-    pub fn confirm_repo_popup(&mut self) {
-        let selected = self.repo_popup_selected();
-        let names = self.repo_names();
-        if let Some(name) = names.get(selected) {
-            self.global.repo_filter = if selected == 0 {
-                super::RepoFilter::All
-            } else {
-                super::RepoFilter::Repo(name.clone())
-            };
-        }
-        self.popup = PopupState::None;
-        self.global.save_repo_filter();
-        self.rebuild_row_targets();
-    }
-
-    pub fn close_repo_popup(&mut self) {
-        self.popup = PopupState::None;
-    }
-
-    // ─── Notices popup ───────────────────────────────────────────────────
-
     pub fn is_notices_popup_open(&self) -> bool {
         matches!(self.popup, PopupState::Notices { .. })
     }
@@ -469,38 +395,8 @@ impl AppState {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{NoticesCopyTarget, RepoFilter};
+    use super::super::NoticesCopyTarget;
     use super::*;
-    use crate::group::{PaneGitInfo, RepoGroup};
-    use crate::tmux::{AgentType, PaneInfo, PaneStatus, PermissionMode, WorktreeMetadata};
-
-    fn test_pane(id: &str) -> PaneInfo {
-        PaneInfo {
-            pane_id: id.into(),
-            pane_active: false,
-            status: PaneStatus::Running,
-            attention: false,
-            agent: AgentType::Claude,
-            path: "/tmp".into(),
-            current_command: String::new(),
-            prompt: String::new(),
-            prompt_is_response: false,
-            started_at: None,
-            wait_reason: String::new(),
-            permission_mode: PermissionMode::Default,
-            subagents: vec![],
-            pane_pid: None,
-            worktree: WorktreeMetadata::default(),
-            session_id: None,
-            session_name: String::new(),
-            custom_name: String::new(),
-            car_emoji: String::new(),
-            agent_window: crate::tmux::AgentWindow::None,
-            ordinal: 0,
-            sidebar_spawned: false,
-            bg_shell_cmd: None,
-        }
-    }
 
     // ─── SpawnField cycle ────────────────────────────────────────────
 
@@ -516,126 +412,7 @@ mod tests {
 
     // ─── PopupState::set_*_area ──────────────────────────────────────
 
-    #[test]
-    fn set_area_updates_only_matching_variant() {
-        let mut popup = PopupState::Repo {
-            selected: 0,
-            area: None,
-        };
-        let rect = ratatui::layout::Rect::new(1, 2, 3, 4);
-        popup.set_repo_area(Some(rect));
-        popup.set_notices_area(Some(rect));
-        popup.set_spawn_input_area(Some(rect));
-        popup.set_remove_confirm_area(Some(rect));
-        match popup {
-            PopupState::Repo { area, .. } => assert_eq!(area, Some(rect)),
-            _ => panic!("variant must remain Repo"),
-        }
-    }
-
     // ─── Repo popup ──────────────────────────────────────────────────
-
-    #[test]
-    fn toggle_repo_popup_sets_selected_to_current() {
-        let mut state = AppState::new("%99".into());
-        state.repo_groups = vec![
-            RepoGroup {
-                name: "alpha".into(),
-                has_focus: true,
-                panes: vec![],
-            },
-            RepoGroup {
-                name: "beta".into(),
-                has_focus: false,
-                panes: vec![],
-            },
-        ];
-
-        state.toggle_repo_popup();
-        assert!(state.is_repo_popup_open());
-        assert_eq!(state.repo_popup_selected(), 0);
-
-        state.close_repo_popup();
-        state.global.repo_filter = RepoFilter::Repo("beta".into());
-        state.toggle_repo_popup();
-        assert_eq!(state.repo_popup_selected(), 2);
-    }
-
-    #[test]
-    fn confirm_repo_popup_sets_filter() {
-        let mut state = AppState::new("%99".into());
-        state.repo_groups = vec![
-            RepoGroup {
-                name: "alpha".into(),
-                has_focus: true,
-                panes: vec![(test_pane("%1"), PaneGitInfo::default())],
-            },
-            RepoGroup {
-                name: "beta".into(),
-                has_focus: false,
-                panes: vec![(test_pane("%2"), PaneGitInfo::default())],
-            },
-        ];
-        state.popup = PopupState::Repo {
-            selected: 2,
-            area: None,
-        };
-        state.confirm_repo_popup();
-
-        assert_eq!(state.global.repo_filter, RepoFilter::Repo("beta".into()));
-        assert!(!state.is_repo_popup_open());
-        assert_eq!(state.layout.pane_row_targets.len(), 1);
-        assert_eq!(state.layout.pane_row_targets[0].pane_id, "%2");
-    }
-
-    #[test]
-    fn confirm_repo_popup_all_resets_filter() {
-        let mut state = AppState::new("%99".into());
-        state.repo_groups = vec![RepoGroup {
-            name: "app".into(),
-            has_focus: true,
-            panes: vec![(test_pane("%1"), PaneGitInfo::default())],
-        }];
-        state.global.repo_filter = RepoFilter::Repo("app".into());
-        state.popup = PopupState::Repo {
-            selected: 0,
-            area: None,
-        };
-        state.confirm_repo_popup();
-
-        assert_eq!(state.global.repo_filter, RepoFilter::All);
-    }
-
-    #[test]
-    fn close_repo_popup_resets_popup_state() {
-        let mut state = AppState::new("%99".into());
-        state.popup = PopupState::Repo {
-            selected: 5,
-            area: Some(ratatui::layout::Rect::new(0, 0, 10, 5)),
-        };
-        assert!(state.is_repo_popup_open());
-        state.close_repo_popup();
-        assert!(matches!(state.popup, PopupState::None));
-        assert!(state.repo_popup_area().is_none());
-    }
-
-    #[test]
-    fn toggle_repo_popup_twice_closes() {
-        let mut state = AppState::new("%99".into());
-        state.toggle_repo_popup();
-        assert!(state.is_repo_popup_open());
-        state.toggle_repo_popup();
-        assert!(!state.is_repo_popup_open());
-    }
-
-    #[test]
-    fn set_repo_popup_selected_noop_when_other_variant() {
-        let mut state = AppState::new("%99".into());
-        state.popup = PopupState::Notices { area: None };
-        state.set_repo_popup_selected(9);
-        // Repo accessor returns default when not in Repo variant.
-        assert_eq!(state.repo_popup_selected(), 0);
-    }
 
     // ─── Notices popup ───────────────────────────────────────────────
 

@@ -5,7 +5,6 @@ use crate::tmux::{self, PaneStatus};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusIcons {
     /// Icon for the "All" filter in the top filter bar.
-    all: String,
     running: String,
     background: String,
     waiting: String,
@@ -17,7 +16,6 @@ pub struct StatusIcons {
 impl Default for StatusIcons {
     fn default() -> Self {
         Self {
-            all: "≡".into(),
             running: "●".into(),
             background: "◎".into(),
             waiting: "◐".into(),
@@ -47,7 +45,6 @@ impl StatusIcons {
                 .unwrap_or_else(|| fallback.to_string())
         };
 
-        icons.all = read(tmux::SIDEBAR_ICON_ALL, &icons.all);
         icons.running = read(tmux::SIDEBAR_ICON_RUNNING, &icons.running);
         icons.background = read(tmux::SIDEBAR_ICON_BACKGROUND, &icons.background);
         icons.waiting = read(tmux::SIDEBAR_ICON_WAITING, &icons.waiting);
@@ -55,11 +52,6 @@ impl StatusIcons {
         icons.error = read(tmux::SIDEBAR_ICON_ERROR, &icons.error);
         icons.unknown = read(tmux::SIDEBAR_ICON_UNKNOWN, &icons.unknown);
         icons
-    }
-
-    /// Icon used for the "All" filter (not tied to any PaneStatus).
-    pub fn all_icon(&self) -> &str {
-        self.all.as_str()
     }
 
     pub fn status_icon(&self, status: &PaneStatus) -> &str {
@@ -81,7 +73,6 @@ mod tests {
     #[test]
     fn default_icons_match_current_glyphs() {
         let icons = StatusIcons::default();
-        assert_eq!(icons.all_icon(), "≡");
         assert_eq!(icons.status_icon(&PaneStatus::Running), "●");
         assert_eq!(icons.status_icon(&PaneStatus::Background), "◎");
         assert_eq!(icons.status_icon(&PaneStatus::Waiting), "◐");
@@ -93,13 +84,11 @@ mod tests {
     #[test]
     fn tmux_options_override_defaults() {
         let mut opts = HashMap::new();
-        opts.insert(tmux::SIDEBAR_ICON_ALL.into(), "∀".into());
         opts.insert(tmux::SIDEBAR_ICON_RUNNING.into(), "◉".into());
         opts.insert(tmux::SIDEBAR_ICON_BACKGROUND.into(), "⊙".into());
         opts.insert(tmux::SIDEBAR_ICON_UNKNOWN.into(), "∎".into());
 
         let icons = StatusIcons::from_options(&opts);
-        assert_eq!(icons.all_icon(), "∀");
         assert_eq!(icons.status_icon(&PaneStatus::Running), "◉");
         assert_eq!(icons.status_icon(&PaneStatus::Background), "⊙");
         assert_eq!(icons.status_icon(&PaneStatus::Unknown), "∎");

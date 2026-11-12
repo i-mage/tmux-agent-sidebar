@@ -12,9 +12,7 @@ reloaded on SIGUSR1.
 
 | Field | Tmux Variable | Update Trigger | Description |
 |-------|--------------|----------------|-------------|
-| `status_filter` | `@sidebar_filter` | User input (left/right key) | Active status filter (All/Running/Background/Waiting/Idle/Error) |
 | `selected_pane_row` | `@sidebar_cursor` | User input (j/k key); tmux write flushed after a short debounce | Cursor position in agent list |
-| `repo_filter` | `@sidebar_repo_filter` | User input (repo popup) | Repository filter (All or specific repo) |
 
 Each field has a corresponding `last_saved_*` to prevent sync conflicts — only overwrites tmux if the local write succeeded.
 
@@ -75,7 +73,7 @@ Per-pane file-based state:
 | `repo_groups` | Every 1s | Panes grouped by git repo root (built directly from `tmux::query_sessions()` output, not stored separately as a session list) |
 | `focus_state.focused_pane_id` | Every 1s, plus immediately on user-initiated pane jumps | Currently focused agent pane |
 | `focus_state.sidebar_focused` | Every 1s | Whether sidebar pane itself has focus |
-| `focus_state.focus` | On user input | UI focus: `Filter` / `Panes` / `ActivityLog`; input also triggers an immediate redraw so focus changes appear without waiting for the next poll tick |
+| `focus_state.focus` | On user input | UI focus: `Panes` / `ActivityLog`; input also triggers an immediate redraw so focus changes appear without waiting for the next poll tick |
 | `focus_state.prev_focused_pane_id` | Every 1s | Previous focused pane ID (for detecting focus changes) |
 | `now` | Every 1s | Current Unix epoch |
 | `scrolls.panes` | On user input / render | Agent list scroll position |
@@ -90,7 +88,7 @@ Per-pane file-based state:
 | `popup` | On user input / render | `PopupState` enum: `None` / `Repo { selected, area }` / `Notices { area }`. Enforces "at most one popup open" via the type system |
 | `layout` | Every frame (render) | `FrameLayout` sub-struct bundling the ephemeral fields the UI rewrites every frame for click hit-testing: `pane_row_targets`, `line_to_row`, `repo_button_col`, `repo_spawn_targets`, `spawn_remove_targets`, `hyperlink_overlays` |
 | `notices` | Once at startup / on copy | `NoticesState` sub-struct: `button_col`, `missing_hook_groups`, `claude_plugin_status`, `claude_settings_has_residual_hooks`, `claude_plugin_notice`, `copy_targets`, `copied_at` |
-| `timers` | Refresh cycle / on user input | `RefreshTimers` sub-struct gating periodic work: `last_filter_click` (debounce), `last_port_refresh`, `port_scan_initialized` |
+| `timers` | Refresh cycle / on user input | `RefreshTimers` sub-struct gating periodic work: `last_port_refresh`, `port_scan_initialized` |
 | `pending_osc52_copy` | On successful copy / frame flush | OSC 52 clipboard payload queued for terminal forwarding |
 | `pet_state` | Every 200ms (animation) | `Idle` / `WalkRight` / `Working` / `WalkLeft` |
 | `pet_x` | Every 200ms (animation) | Pet X position |
@@ -142,11 +140,10 @@ Per-pane file-based state:
 │  On user input                                              │
 │  focus_state.focus, scrolls.*, activity.scroll, bottom_tab, │
 │  GlobalState fields, popup (PopupState enum),               │
-│  timers.last_filter_click,                                  │
 │  immediate selection / active-pane redraw                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Every frame (render)                                       │
-│  layout.line_to_row, popup.area (Repo/Notices variants),    │
+│  layout.line_to_row, popup.area (Notices/SpawnInput/RemoveConfirm),    │
 │  notices.button_col, notices.copy_targets,                  │
 │  layout.hyperlink_overlays                                  │
 └─────────────────────────────────────────────────────────────┘
@@ -170,7 +167,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render})
   → refresh() every 1s
     → query_sessions() (tmux.rs)     ← reads @pane_* via `tmux list-panes -a`
     → group_panes_by_repo() (group.rs)
-    → rebuild_row_targets()          ← applies GlobalState filters
+    → rebuild_row_targets()          ← lists every agent pane
     → refresh_activity_data()        ← reads /tmp activity logs
     → refresh_task_progress()        ← updates PaneRuntimeState.task_progress
     → refresh_port_data()            ← updates PaneRuntimeState.ports
@@ -187,9 +184,7 @@ TUI main loop (app::run in app.rs; submodules app/{setup,workers,input,render})
 ## Key Types
 
 ```rust
-enum Focus { Filter, Panes, ActivityLog }
-enum StatusFilter { All, Running, Background, Waiting, Idle, Error }
-enum RepoFilter { All, Repo(String) }
+enum Focus { Panes, ActivityLog }
 enum BottomTab { Activity, GitStatus }
 enum PaneStatus { Running, Background, Waiting, Idle, Error, Unknown }
 enum AgentType { Claude, Codex, OpenCode, Unknown }
@@ -302,7 +297,6 @@ struct FrameLayout {
 /// NOT here — it lives in a dedicated background thread so the TUI
 /// thread never performs blocking filesystem I/O.
 struct RefreshTimers {
-    last_filter_click: Instant,
     last_port_refresh: Instant,
     port_scan_initialized: bool,
 }

@@ -89,9 +89,7 @@ pub const SIDEBAR_PID: &str = "@sidebar_pid";
 pub const SIDEBAR_GLOBAL_HIDDEN: &str = "@sidebar_global_hidden";
 pub const SIDEBAR_WIDTH: &str = "@sidebar_width";
 pub const SIDEBAR_POSITION: &str = "@sidebar_position";
-pub const SIDEBAR_FILTER: &str = "@sidebar_filter";
 pub const SIDEBAR_CURSOR: &str = "@sidebar_cursor";
-pub const SIDEBAR_REPO_FILTER: &str = "@sidebar_repo_filter";
 pub const SIDEBAR_BOTTOM_HEIGHT: &str = "@sidebar_bottom_height";
 pub const SIDEBAR_SHOW_BRANCH: &str = "@sidebar_show_branch";
 /// Fork-local: blank line between repo groups (default on).
@@ -102,12 +100,10 @@ pub const SIDEBAR_NOTIFICATIONS_EVENTS: &str = "@sidebar_notifications_events";
 
 pub const SIDEBAR_COLOR_ACCENT: &str = "@sidebar_color_accent";
 pub const SIDEBAR_COLOR_BORDER: &str = "@sidebar_color_border";
-pub const SIDEBAR_COLOR_ALL: &str = "@sidebar_color_all";
 pub const SIDEBAR_COLOR_RUNNING: &str = "@sidebar_color_running";
 pub const SIDEBAR_COLOR_WAITING: &str = "@sidebar_color_waiting";
 pub const SIDEBAR_COLOR_IDLE: &str = "@sidebar_color_idle";
 pub const SIDEBAR_COLOR_ERROR: &str = "@sidebar_color_error";
-pub const SIDEBAR_COLOR_FILTER_INACTIVE: &str = "@sidebar_color_filter_inactive";
 pub const SIDEBAR_COLOR_AGENT_CLAUDE: &str = "@sidebar_color_agent_claude";
 pub const SIDEBAR_COLOR_AGENT_CODEX: &str = "@sidebar_color_agent_codex";
 pub const SIDEBAR_COLOR_AGENT_OPENCODE: &str = "@sidebar_color_agent_opencode";
@@ -139,7 +135,6 @@ pub const SIDEBAR_COLOR_SECTION_TITLE: &str = "@sidebar_color_section_title";
 pub const SIDEBAR_COLOR_ACTIVITY_TIMESTAMP: &str = "@sidebar_color_activity_timestamp";
 pub const SIDEBAR_COLOR_RESPONSE_ARROW: &str = "@sidebar_color_response_arrow";
 
-pub const SIDEBAR_ICON_ALL: &str = "@sidebar_icon_all";
 pub const SIDEBAR_ICON_RUNNING: &str = "@sidebar_icon_running";
 pub const SIDEBAR_ICON_BACKGROUND: &str = "@sidebar_icon_background";
 pub const SIDEBAR_ICON_WAITING: &str = "@sidebar_icon_waiting";
